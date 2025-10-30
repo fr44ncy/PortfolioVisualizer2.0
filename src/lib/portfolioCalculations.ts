@@ -1,14 +1,16 @@
 // src/lib/portfolioCalculations.ts
 
 import { Asset, PricePoint, NavPoint, PortfolioMetrics } from '../types';
-import { EXCHANGE_RATES } from './assetData';
+// *** MODIFICA: Importa getConversionRate e EXCHANGE_RATES ***
+import { EXCHANGE_RATES, getConversionRate } from './assetData';
 
 /**
  * Formatta un valore numerico in una stringa di valuta (es. €1.2M, $120k).
  * La valuta di default è EUR.
  */
 export function formatCurrency(value: number, currency: string = 'EUR'): string {
-  const symbol = EXCHANGE_RATES[currency]?.symbol || '€';
+  // *** MODIFICA: Usa il simbolo corretto dalla valuta target ***
+  const symbol = EXCHANGE_RATES[currency]?.symbol || currency;
   const abs = Math.abs(Number(value));
   if (abs >= 1e9) return symbol + (value / 1e9).toFixed(2) + 'B';
   if (abs >= 1e6) return symbol + (value / 1e6).toFixed(2) + 'M';
@@ -18,12 +20,13 @@ export function formatCurrency(value: number, currency: string = 'EUR'): string 
 
 /**
  * Calcola la serie storica del Valore Netto dell'Attivo (NAV) del portfolio.
- * Converte tutte le valute in EUR (valuta base) per il calcolo.
+ * Converte tutte le valute nella valuta 'currency' (target) per il calcolo.
  */
 export function computeNavSeries(
   pricesData: Record<string, PricePoint[]>,
   assets: Asset[],
-  initialCapital: number
+  initialCapital: number,
+  currency: string // <-- Questa è la valuta TARGET (es. 'USD', 'EUR')
 ): NavPoint[] {
   const tickers = assets.map(a => a.ticker).filter(Boolean);
   if (tickers.length === 0) return [];
@@ -63,11 +66,12 @@ export function computeNavSeries(
     // *** FINE CORREZIONE ***
     
     if (rec) {
+      // *** MODIFICA: Converti nella valuta TARGET (non EUR) ***
       const assetCurrency = asset.currency || rec.currency || 'USD';
-      const rate = EXCHANGE_RATES[assetCurrency]?.rateToEUR || 1;
-      const priceInEUR = rec.close * rate;
+      const rate = getConversionRate(assetCurrency, currency); // da Nativa -> a Target
+      const priceInTargetCurrency = rec.close * rate;
       const alloc = (asset.weight / 100) * initialCapital;
-      shares[t] = priceInEUR > 0 ? alloc / priceInEUR : 0;
+      shares[t] = priceInTargetCurrency > 0 ? alloc / priceInTargetCurrency : 0;
     } else {
       shares[t] = 0; // Nessun dato di prezzo trovato
     }
@@ -93,11 +97,12 @@ export function computeNavSeries(
       }
       
       if (rec) {
+        // *** MODIFICA: Converti nella valuta TARGET (non EUR) ***
         const assetCurrency = asset.currency || rec.currency || 'USD';
-        const rate = EXCHANGE_RATES[assetCurrency]?.rateToEUR || 1;
-        const priceInEUR = rec.close * rate;
+        const rate = getConversionRate(assetCurrency, currency); // da Nativa -> a Target
+        const priceInTargetCurrency = rec.close * rate;
         const s = shares[t] || 0;
-        total += s * priceInEUR;
+        total += s * priceInTargetCurrency;
       }
     });
     return { date, nav: Number(total.toFixed(2)) };
