@@ -212,18 +212,21 @@ export default function App() {
         const days = backtestYears * 365;
         const priceData: Record<string, PricePoint[]> = {};
         const now = Date.now();
-        const cacheKey = (ticker: string) =>
-          `${ticker}_${backtestYears}_${currency}`;
 
         for (const asset of assets) {
           if (!asset.ticker) continue;
-          const key = cacheKey(asset.ticker);
+          
+          // *** MODIFICA: Chiave cache corretta ***
+          // Usa la valuta NATIA dell'asset, non la valuta TARGET del portfolio
+          const key = `${asset.ticker}_${backtestYears}_${asset.currency}`;
+
           const cached = priceCache.current[key];
+          
           if (cached && now - cached.timestamp < CACHE_TTL) {
             priceData[asset.ticker] = cached.data;
             continue;
           }
-          // *** MODIFICA: Passa 'days' a fetchPriceHistory ***
+          
           const result = await fetchPriceHistory(
             asset.ticker,
             days,
@@ -241,7 +244,6 @@ export default function App() {
           priceData[asset.ticker] = result.data;
         }
 
-        // *** MODIFICA: Passa la valuta 'currency' (target) a computeNavSeries ***
         const series = computeNavSeries(priceData, assets, initialCapital, currency);
         if (series.length < 2) {
           throw new Error(
@@ -331,7 +333,6 @@ export default function App() {
                     <option value="EUR">EUR €</option>
                     <option value="USD">USD $</option>
                     <option value="GBP">GBP £</option>
-                    {/* *** MODIFICA: Aggiunto CHF *** */}
                     <option value="CHF">CHF</option>
                   </select>
                 </div>
@@ -340,7 +341,6 @@ export default function App() {
                 <div className="h-10 border-l border-gray-200 mx-3"></div>
 
                 {!session ? (
-                  // *** MODIFICA: Mostra pulsante per aprire il tuo AuthModal ***
                   <button
                     onClick={() => setShowAuthModal(true)}
                     className="flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg shadow-sm hover:bg-gray-50"
@@ -349,7 +349,6 @@ export default function App() {
                     Accedi per Salvare
                   </button>
                 ) : (
-                  // *** MODIFICA: Mostra i pulsanti per utente loggato ***
                   <div className="flex items-center gap-2">
                     <div className="text-right hidden sm:block">
                       <div className="text-sm font-medium text-gray-800">
@@ -425,7 +424,6 @@ export default function App() {
               <div className="bg-white rounded-2xl border border-gray-200 shadow-lg p-6">
                 <div className="flex items-center justify-between mb-4">
                   <div>
-                    {/* *** MODIFICA: Mostra il nome del portafoglio *** */}
                     <h2 className="text-xl font-bold text-gray-900">
                       Valore Portfolio: {portfolioName}
                     </h2>
@@ -536,7 +534,6 @@ export default function App() {
                   value={
                     metrics.finalValue !== null
                       ? 
-                      /* *** MODIFICA: Usa EXCHANGE_RATES per il simbolo *** */
                       `${
                           EXCHANGE_RATES[currency]?.symbol || currency
                         }${(metrics.finalValue / 1000).toFixed(1)}k`
@@ -579,7 +576,6 @@ export default function App() {
         onLoad={handleLoadPortfolio}
       />
       
-      {/* *** MODIFICA: Aggiunto il tuo AuthModal *** */}
       {showAuthModal && (
         <AuthModal onClose={() => setShowAuthModal(false)} />
       )}
