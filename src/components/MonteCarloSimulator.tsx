@@ -1,9 +1,15 @@
 // src/components/MonteCarloSimulator.tsx
 import React, { useState } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { 
+  LineChart, Line, 
+  AreaChart, Area, // Importa AreaChart e Area
+  XAxis, YAxis, 
+  CartesianGrid, Tooltip, 
+  ResponsiveContainer, Legend 
+} from 'recharts';
 import { PortfolioMetrics } from '../types';
 import { formatCurrency } from '../lib/portfolioCalculations';
-import { Play, Loader2, Zap } from 'lucide-react';
+import { Play, Loader2, Zap, LineChart as LineChartIcon, AreaChart as AreaChartIcon } from 'lucide-react'; // Importa icone per il toggle
 
 interface MonteCarloSimulatorProps {
   metrics: PortfolioMetrics;
@@ -20,13 +26,13 @@ type SimDataPoint = {
   grande: number;
 };
 
-// Tooltip personalizzato per il grafico
-const CustomTooltip = ({ active, payload, label, currency }: any) => {
+// Tooltip per GRAFICO A LINEE (come prima)
+const LineTooltip = ({ active, payload, label, currency }: any) => {
   if (active && payload && payload.length) {
     return (
       <div className="bg-white px-4 py-3 border border-gray-200 rounded-lg shadow-lg text-sm">
         <p className="text-xs text-gray-500 mb-2">Anno: {label}</p>
-        {payload.slice().reverse().map((entry: any) => ( // Inverte per mostrare "Grande" in alto
+        {payload.slice().reverse().map((entry: any) => (
           <div key={entry.name} style={{ color: entry.color }} className="font-medium">
             {entry.name}: {formatCurrency(entry.value, currency)}
           </div>
@@ -37,6 +43,28 @@ const CustomTooltip = ({ active, payload, label, currency }: any) => {
   return null;
 };
 
+// Tooltip per GRAFICO AD AREA (mostra solo la mediana)
+const AreaTooltip = ({ active, payload, label, currency }: any) => {
+  if (active && payload && payload.length) {
+    // Trova la mediana (che è l'unica linea)
+    const mediaEntry = payload.find((p: any) => p.dataKey === 'media');
+    const mediaValue = mediaEntry ? mediaEntry.value : null;
+
+    return (
+      <div className="bg-white px-4 py-3 border border-gray-200 rounded-lg shadow-lg text-sm">
+        <p className="text-xs text-gray-500 mb-2">Anno: {label}</p>
+        {mediaValue !== null && (
+          <div style={{ color: '#0056b3' }} className="font-bold text-base">
+            Mediana: {formatCurrency(mediaValue, currency)}
+          </div>
+        )}
+      </div>
+    );
+  }
+  return null;
+};
+
+
 export default function MonteCarloSimulator({
   metrics,
   initialCapital,
@@ -46,7 +74,10 @@ export default function MonteCarloSimulator({
   const [loading, setLoading] = useState(false);
   const [simulationData, setSimulationData] = useState<SimDataPoint[]>([]);
   const [numSimulations, setNumSimulations] = useState<number>(1000);
-  const [simYears, setSimYears] = useState<number>(30); // Fisso a 30 anni come da foto
+  const [simYears, setSimYears] = useState<number>(30);
+  
+  // *** NUOVO STATO: per il tipo di grafico ***
+  const [chartType, setChartType] = useState<'lines' | 'area'>('lines');
   
   const canRun = metrics.annualReturn !== null && metrics.annualVol !== null;
 
@@ -90,23 +121,59 @@ export default function MonteCarloSimulator({
 
   return (
     <div className="bg-white rounded-2xl border border-gray-200 shadow-lg p-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-5">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-2">
         <div>
           <h2 className="text-xl font-bold text-gray-900">Simulazione Monte Carlo</h2>
           <p className="text-sm text-gray-600 mt-1">
             Proietta l'evoluzione del capitale in {simYears} anni su {numSimulations} scenari.
           </p>
         </div>
+      </div>
+      
+      {/* Controlli Simulazione */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
         
-        {/* Controlli Simulazione */}
-        <div className="flex items-center gap-3 mt-4 sm:mt-0">
-          <div className="flex items-center gap-2 bg-gray-50 px-3 py-2 rounded-lg border border-gray-200">
+        {/* Gruppo Toggles Tipo Grafico */}
+        <div className="flex items-center gap-2 p-1 bg-gray-100 rounded-lg border border-gray-200 w-full sm:w-auto justify-start">
+            <label className="text-sm text-gray-700 font-medium pl-2 hidden sm:block">Grafico:</label>
+            <button
+              onClick={() => setChartType('lines')}
+              disabled={loading}
+              title="Grafico a Linee"
+              className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium ${
+                chartType === 'lines' 
+                ? 'bg-white text-blue-700 shadow-sm' 
+                : 'text-gray-500 hover:text-gray-800'
+              }`}
+            >
+              <LineChartIcon className="w-4 h-4" />
+              Linee
+            </button>
+            <button
+              onClick={() => setChartType('area')}
+              disabled={loading}
+              title="Grafico ad Area"
+              className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium ${
+                chartType === 'area' 
+                ? 'bg-white text-blue-700 shadow-sm' 
+                : 'text-gray-500 hover:text-gray-800'
+              }`}
+            >
+              <AreaChartIcon className="w-4 h-4" />
+              Area
+            </button>
+        </div>
+
+        {/* Gruppo Azioni */}
+        <div className="flex items-center gap-3 w-full sm:w-auto">
+          <div className="flex-1 sm:flex-none flex items-center gap-2 bg-gray-50 px-3 py-2 rounded-lg border border-gray-200">
             <label className="text-sm text-gray-700 font-medium">Scenari</label>
             <select
               value={numSimulations}
               onChange={(e) => setNumSimulations(Number(e.target.value))}
               disabled={loading}
-              className="px-2 py-1 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              className="w-full sm:w-auto px-2 py-1 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
             >
               <option value={1000}>1,000</option>
               <option value={5000}>5,000</option>
@@ -117,14 +184,14 @@ export default function MonteCarloSimulator({
           <button
             onClick={handleRunSimulation}
             disabled={!canRun || loading}
-            className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all shadow-md hover:shadow-lg disabled:opacity-50"
+            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all shadow-md hover:shadow-lg disabled:opacity-50"
           >
             {loading ? (
               <Loader2 className="w-5 h-5 animate-spin" />
             ) : (
               <Play className="w-5 h-5" />
             )}
-            {loading ? 'Calcolo...' : 'Avvia Simulazione'}
+            {loading ? 'Calcolo...' : 'Avvia'}
           </button>
         </div>
       </div>
@@ -147,36 +214,101 @@ export default function MonteCarloSimulator({
           </div>
         )}
         {!loading && simulationData.length > 0 && (
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={simulationData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis
-                dataKey="year"
-                tick={{ fontSize: 11, fill: '#999' }}
-                label={{ value: 'Durata prevista del periodo in anni', position: 'insideBottom', dy: 10, fontSize: 12 }}
-              />
-              <YAxis
-                tick={{ fontSize: 11, fill: '#999' }}
-                tickFormatter={(v) => formatCurrency(v, currency)}
-                scale="linear"
-                domain={['auto', 'auto']}
-              />
-              <Tooltip content={<CustomTooltip currency={currency} />} />
-              <Legend verticalAlign="top" align="right" />
-              
-              {/* Linee come da foto */}
-              <Line dataKey="moltoMale" name="Molto male (5%)" stroke="#d9534f" strokeWidth={2} dot={false} />
-              <Line dataKey="cattivo" name="Cattivo (25%)" stroke="#f0ad4e" strokeWidth={2} dot={false} />
-              <Line dataKey="media" name="Media (50%)" stroke="#0275d8" strokeWidth={3} dot={false} />
-              <Line dataKey="buono" name="Buono (75%)" stroke="#5cb85c" strokeWidth={2} dot={false} />
-              <Line dataKey="grande" name="Grande (95%)" stroke="#34a853" strokeWidth={2} dot={false} />
-            </LineChart>
-          </ResponsiveContainer>
+          <>
+            {/* --- GRAFICO 1: LINEE (Come da foto 1) --- */}
+            {chartType === 'lines' && (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={simulationData} margin={{ top: 5, right: 20, left: 0, bottom: 20 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis
+                    dataKey="year"
+                    tick={{ fontSize: 11, fill: '#999' }}
+                    label={{ value: 'Durata prevista del periodo in anni', position: 'insideBottom', dy: 15, fontSize: 12 }}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 11, fill: '#999' }}
+                    tickFormatter={(v) => formatCurrency(v, currency)}
+                    scale="linear"
+                    domain={['auto', 'auto']}
+                  />
+                  <Tooltip content={<LineTooltip currency={currency} />} />
+                  <Legend verticalAlign="top" align="right" />
+                  
+                  <Line dataKey="moltoMale" name="Molto male (5%)" stroke="#d9534f" strokeWidth={2} dot={false} />
+                  <Line dataKey="cattivo" name="Cattivo (25%)" stroke="#f0ad4e" strokeWidth={2} dot={false} />
+                  <Line dataKey="media" name="Media (50%)" stroke="#0275d8" strokeWidth={3} dot={false} />
+                  <Line dataKey="buono" name="Buono (75%)" stroke="#5cb85c" strokeWidth={2} dot={false} />
+                  <Line dataKey="grande" name="Grande (95%)" stroke="#34a853" strokeWidth={2} dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
+            
+            {/* --- GRAFICO 2: AREE (Come da foto 2) --- */}
+            {chartType === 'area' && (
+              <div className="relative w-full h-full"> {/* Container per il label */}
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={simulationData} margin={{ top: 5, right: 20, left: 0, bottom: 20 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                    <XAxis
+                      dataKey="year"
+                      tick={{ fontSize: 11, fill: '#999' }}
+                      label={{ value: 'Durata prevista del periodo in anni', position: 'insideBottom', dy: 15, fontSize: 12 }}
+                    />
+                    <YAxis
+                      tick={{ fontSize: 11, fill: '#999' }}
+                      tickFormatter={(v) => formatCurrency(v, currency)}
+                      scale="linear"
+                      domain={['auto', 'auto']}
+                    />
+                    <Tooltip content={<AreaTooltip currency={currency} />} />
+                    <Legend verticalAlign="top" align="right" />
+
+                    {/* Banda Larga (5% - 95%) - Azzurro chiaro */}
+                    <Area 
+                      type="monotone" 
+                      dataKey={['moltoMale', 'grande']} // Definisce il range
+                      fill="#a0d8ff" // Azzurro chiaro
+                      stroke="none"
+                      fillOpacity={0.4}
+                      name="Range 5%-95%"
+                      isAnimationActive={false} // Animazione più fluida
+                    />
+                    
+                    {/* Banda Stretta (25% - 75%) - Azzurro più scuro */}
+                    <Area 
+                      type="monotone" 
+                      dataKey={['cattivo', 'buono']} // Definisce il range
+                      fill="#40a9ff" // Azzurro medio
+                      stroke="none"
+                      fillOpacity={0.6}
+                      name="Range 25%-75%"
+                      isAnimationActive={false}
+                    />
+
+                    {/* Linea Mediana (50%) */}
+                    <Line 
+                      type="monotone" 
+                      dataKey="media" 
+                      name="Portfolio - Mediana"
+                      stroke="#0056b3" // Blu scuro
+                      strokeWidth={2} 
+                      dot={false}
+                      isAnimationActive={false}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+                {/* Etichetta numero simulazioni */}
+                <div className="absolute top-2 right-8 bg-white bg-opacity-80 px-3 py-1 rounded-md border border-gray-200 shadow-sm text-xs font-semibold text-gray-700 pointer-events-none">
+                  {numSimulations.toLocaleString()} simulazioni
+                </div>
+              </div>
+            )}
+          </>
         )}
         {!loading && canRun && simulationData.length === 0 && (
            <div className="flex items-center justify-center h-full text-gray-400 text-sm border-2 border-dashed border-gray-200 rounded-xl bg-gray-50">
              <Zap className="w-5 h-5 mr-2" />
-             Clicca "Avvia Simulazione" per vedere le proiezioni.
+             Clicca "Avvia" per vedere le proiezioni.
            </div>
         )}
       </div>
