@@ -1,15 +1,12 @@
 // src/lib/portfolioCalculations.ts
 
 import { Asset, PricePoint, NavPoint, PortfolioMetrics } from '../types';
-// *** MODIFICA: Importa getConversionRate e EXCHANGE_RATES ***
 import { EXCHANGE_RATES, getConversionRate } from './assetData';
 
 /**
  * Formatta un valore numerico in una stringa di valuta (es. €1.2M, $120k).
- * La valuta di default è EUR.
  */
 export function formatCurrency(value: number, currency: string = 'EUR'): string {
-  // *** MODIFICA: Usa il simbolo corretto dalla valuta target ***
   const symbol = EXCHANGE_RATES[currency]?.symbol || currency;
   const abs = Math.abs(Number(value));
   if (abs >= 1e9) return symbol + (value / 1e9).toFixed(2) + 'B';
@@ -19,25 +16,55 @@ export function formatCurrency(value: number, currency: string = 'EUR'): string 
 }
 
 /**
+ * Helper per trovare il prezzo più vicino a una data (forward-fill).
+ */
+function findPriceByDate(date: string, series: PricePoint[]): PricePoint | null {
+  if (!series || series.length === 0) return null;
+  
+  let bestMatch = null;
+  // Cerca la data esatta o l'ultima precedente
+  for (const point of series) {
+    if (point.date <= date) {
+      bestMatch = point;
+    } else {
+      break; // Le serie sono ordinate, possiamo fermarci
+    }
+  }
+  return bestMatch;
+}
+
+/**
  * Calcola la serie storica del Valore Netto dell'Attivo (NAV) del portfolio.
- * Converte tutte le valute nella valuta 'currency' (target) per il calcolo.
+ * *** Questa versione include l'impatto storico del cambio (FX-adjusted) ***
  */
 export function computeNavSeries(
   pricesData: Record<string, PricePoint[]>,
+  fxData: Record<string, PricePoint[]>, // Dati storici FX (es. 'USD-EUR')
   assets: Asset[],
   initialCapital: number,
-  currency: string // <-- Questa è la valuta TARGET (es. 'USD', 'EUR')
+  targetCurrency: string // Valuta del portfolio (es. 'EUR')
 ): NavPoint[] {
+  
   const tickers = assets.map(a => a.ticker).filter(Boolean);
   if (tickers.length === 0) return [];
 
-  // 1. Trova la data di inizio comune (la data più recente tra le date di inizio di tutti gli asset)
-  const firstDates = tickers
-    .map(t => (pricesData[t] || []).length ? pricesData[t][0].date : null)
-    .filter(Boolean) as string[];
+  // 1. Trova la data di inizio comune (la data più recente tra le date di inizio di tutti gli asset E tassi FX)
+  let firstDates: string[] = [];
+  
+  tickers.forEach(t => {
+    const series = pricesData[t] || [];
+    if (series.length > 0) firstDates.push(series[0].date);
+  });
+  
+  assets.forEach(asset => {
+    if (asset.currency !== targetCurrency) {
+      const pair = `${asset.currency}-${targetCurrency}`;
+      const series = fxData[pair] || [];
+      if (series.length > 0) firstDates.push(series[0].date);
+    }
+  });
 
   if (firstDates.length === 0) return [];
-
   const commonStart = firstDates.sort().reverse()[0];
 
   // 2. Crea un set di tutte le date di trading uniche da quel punto in poi
@@ -47,76 +74,103 @@ export function computeNavSeries(
       if (p.date >= commonStart) dateSet.add(p.date);
     });
   });
-
+  
   const dates = Array.from(dateSet).sort();
   if (dates.length === 0) return [];
 
-  // 3. Calcola il numero di "azioni" (quote) per ogni asset in base al capitale iniziale e al peso
+  // 3. Calcola il numero di "azioni" (quote) per ogni asset
+  // Questo si basa sul capitale INIZIALE e sui tassi di cambio INIZIALI
   const shares: Record<string, number> = {};
+  
   assets.forEach(asset => {
     const t = asset.ticker;
     if (!t) return;
-    const arr = pricesData[t] || [];
-    let rec = arr.find(r => r.date === commonStart);
     
-    // *** INIZIO CORREZIONE: Cerca la data o la prima successiva ***
-    // Se non trova il prezzo esatto alla data di inizio, cerca il primo prezzo
-    // disponibile *a partire da* (maggiore o UGUALE) quella data.
-    if (!rec) rec = arr.find(r => r.date >= commonStart);
-    // *** FINE CORREZIONE ***
-    
-    if (rec) {
-      // *** MODIFICA: Converti nella valuta TARGET (non EUR) ***
-      const assetCurrency = asset.currency || rec.currency || 'USD';
-      const rate = getConversionRate(assetCurrency, currency); // da Nativa -> a Target
-      const priceInTargetCurrency = rec.close * rate;
-      const alloc = (asset.weight / 100) * initialCapital;
-      shares[t] = priceInTargetCurrency > 0 ? alloc / priceInTargetCurrency : 0;
-    } else {
-      shares[t] = 0; // Nessun dato di prezzo trovato
+    const assetPriceSeries = pricesData[t] || [];
+    const initialPricePt = findPriceByDate(commonStart, assetPriceSeries);
+    if (!initialPricePt) {
+      console.warn(`Nessun prezzo iniziale per ${t} a ${commonStart}`);
+      shares[t] = 0;
+      return;
     }
+    const priceInNativeCcy = initialPricePt.close;
+
+    // Calcola l'allocazione in valuta target
+    const allocationInTargetCcy = (asset.weight / 100) * initialCapital;
+
+    let priceInTargetCcy = 0;
+
+    if (asset.currency === targetCurrency) {
+      priceInTargetCcy = priceInNativeCcy;
+    } else {
+      // Trova il tasso di cambio INIZIALE
+      const pair = `${asset.currency}-${targetCurrency}`;
+      const fxSeries = fxData[pair] || [];
+      const initialFxPt = findPriceByDate(commonStart, fxSeries);
+      
+      if (!initialFxPt) {
+        console.warn(`Nessun tasso FX iniziale per ${pair} a ${commonStart}`);
+        shares[t] = 0;
+        return;
+      }
+      priceInTargetCcy = priceInNativeCcy * initialFxPt.close;
+    }
+
+    shares[t] = priceInTargetCcy > 0 ? allocationInTargetCcy / priceInTargetCcy : 0;
   });
 
   // 4. Calcola il valore totale (NAV) del portfolio per ogni giorno
+  // *** Usando i tassi di cambio STORICI ***
   const series = dates.map(date => {
-    let total = 0;
+    let totalNavInTargetCcy = 0;
+    
     assets.forEach(asset => {
       const t = asset.ticker;
-      if (!t) return;
-      const arr = pricesData[t] || [];
+      if (!t || !shares[t]) return;
+
+      // Trova il prezzo dell'asset per la data corrente
+      const assetPricePt = findPriceByDate(date, pricesData[t]);
+      if (!assetPricePt) return; // Salta se mancano dati per questo asset
       
-      // Trova il prezzo più recente per quella data (gestione "forward fill" per giorni mancanti)
-      let rec = arr.find(r => r.date === date);
-      if (!rec) {
-        for (let i = arr.length - 1; i >= 0; i--) {
-          if (arr[i].date <= date) {
-            rec = arr[i];
-            break;
-          }
-        }
+      const priceInNativeCcy = assetPricePt.close;
+      let valueInTargetCcy = 0;
+
+      if (asset.currency === targetCurrency) {
+        valueInTargetCcy = shares[t] * priceInNativeCcy;
+      } else {
+        // Trova il tasso di cambio per la data corrente
+        const pair = `${asset.currency}-${targetCurrency}`;
+        const fxPt = findPriceByDate(date, fxData[pair]);
+        if (!fxPt) return; // Salta se mancano dati FX per questo giorno
+        
+        const fxRate = fxPt.close;
+        valueInTargetCcy = shares[t] * (priceInNativeCcy * fxRate);
       }
       
-      if (rec) {
-        // *** MODIFICA: Converti nella valuta TARGET (non EUR) ***
-        const assetCurrency = asset.currency || rec.currency || 'USD';
-        const rate = getConversionRate(assetCurrency, currency); // da Nativa -> a Target
-        const priceInTargetCurrency = rec.close * rate;
-        const s = shares[t] || 0;
-        total += s * priceInTargetCurrency;
-      }
+      totalNavInTargetCcy += valueInTargetCcy;
     });
-    return { date, nav: Number(total.toFixed(2)) };
+
+    return { date, nav: Number(totalNavInTargetCcy.toFixed(2)) };
   });
 
-  // 5. Scala la serie per iniziare esattamente dal capitale iniziale (normalizzazione)
-  if (series.length > 0 && series[0].nav > 0) {
-    const factor = initialCapital / series[0].nav;
-    const scaled = series.map(s => ({ date: s.date, nav: Number((s.nav * factor).toFixed(2)) }));
-    return scaled.filter(s => s.nav > 0);
+  // 5. Filtra i giorni in cui il NAV era 0 (prima che tutti gli asset avessero dati)
+  const validSeries = series.filter(s => s.nav > 0);
+  if (validSeries.length === 0) return [];
+
+  // 6. Scala la serie per iniziare esattamente dal capitale iniziale (normalizzazione)
+  const firstNav = validSeries[0].nav;
+  if (firstNav > 0) {
+    const factor = initialCapital / firstNav;
+    const scaled = validSeries.map(s => ({ 
+      date: s.date, 
+      nav: Number((s.nav * factor).toFixed(2)) 
+    }));
+    return scaled;
   }
 
-  return series.filter(s => s.nav > 0);
+  return validSeries;
 }
+
 
 /**
  * Calcola i ritorni giornalieri da una serie NAV.
@@ -163,22 +217,39 @@ export function calculateMetrics(navSeries: NavPoint[]): PortfolioMetrics {
 
   const start = navSeries[0].nav;
   const end = navSeries[navSeries.length - 1].nav;
-  // Assumiamo 252 giorni di trading all'anno
-  const years = (navSeries.length - 1) / 252 || 1; 
+  
+  // Calcola gli anni basandoti sulle date effettive per maggior precisione
+  const startDate = new Date(navSeries[0].date);
+  const endDate = new Date(navSeries[navSeries.length - 1].date);
+  const years = (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24 * 365.25) || 1;
 
   const annReturn = Math.pow(end / start, 1 / years) - 1;
-  const annVol = dailyStd * Math.sqrt(252);
+  const annVol = dailyStd * Math.sqrt(252); // Assumiamo 252 giorni di trading
   // Assumiamo un risk-free rate del 2% per lo Sharpe Ratio
   const sharpeRatio = (annReturn - 0.02) / (annVol || 1e-9); 
 
   // Calcola VaR e CVaR storici basati sui rendimenti rolling a 1 anno
   const rolling: number[] = [];
   const window = 252; // 1 anno di trading
+  
+  // Creiamo una mappa dei NAV per data per un accesso rapido
+  const navMap = new Map(navSeries.map(p => [p.date, p.nav]));
+  
   if (navSeries.length >= window) {
     for (let i = window; i < navSeries.length; i++) {
-      rolling.push(navSeries[i].nav / navSeries[i - window].nav - 1);
+        // Cerca il NAV di 1 anno prima (252 giorni di trading prima)
+        const currentDate = navSeries[i].date;
+        const prevDate = navSeries[i - window].date; 
+        
+        const currentNav = navMap.get(currentDate);
+        const prevNav = navMap.get(prevDate);
+        
+        if (currentNav && prevNav) {
+            rolling.push(currentNav / prevNav - 1);
+        }
     }
   }
+
 
   let var_hist = null;
   let cvar_hist = null;
@@ -191,6 +262,19 @@ export function calculateMetrics(navSeries: NavPoint[]): PortfolioMetrics {
     const worst = sorted.slice(0, idx + 1); // Prende il 5% peggiore
     const avgWorst = worst.reduce((s, x) => s + x, 0) / worst.length;
     cvar_hist = -avgWorst; // Conditional Value at Risk
+  } else {
+      // Fallback se non ci sono abbastanza dati per il rolling (es. < 1 anno)
+      // Calcola VaR/CVaR sui rendimenti giornalieri (meno significativo ma è un dato)
+      if (daily.length > 20) {
+           const sortedDaily = [...daily].sort((a, b) => a - b);
+           const idxDaily = Math.floor(0.05 * sortedDaily.length);
+           const p95Daily = sortedDaily[Math.max(0, idxDaily)];
+           var_hist = -p95Daily * Math.sqrt(252); // Annualizza VaR giornaliero (approssimazione)
+           
+           const worstDaily = sortedDaily.slice(0, idxDaily + 1);
+           const avgWorstDaily = worstDaily.reduce((s, x) => s + x, 0) / worstDaily.length;
+           cvar_hist = -avgWorstDaily * Math.sqrt(252); // Annualizza CVaR giornaliero
+      }
   }
 
   return {
