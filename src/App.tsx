@@ -43,7 +43,7 @@ const emptyMetrics: PortfolioMetrics = {
 type PriceCache = Record<string, { data: PricePoint[]; timestamp: number }>;
 
 export default function App() {
-  // --- STATI ---
+  // --- STATI (Invariati) ---
   const [assets, setAssets] = useState<Asset[]>([]);
   const [currency, setCurrency] = useState<string>('EUR');
   const [initialCapital, setInitialCapital] = useState<number>(100000);
@@ -56,17 +56,14 @@ export default function App() {
   >([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
-  // --- STATI AUTH ---
   const [session, setSession] = useState<Session | null>(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showLoadModal, setShowLoadModal] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [portfolioName, setPortfolioName] = useState('Il Mio Portafoglio');
-
   const priceCache = useRef<PriceCache>({});
   const fxCache = useRef<PriceCache>({});
-  const CACHE_TTL = 1000 * 60 * 60; // 1 ora
+  const CACHE_TTL = 1000 * 60 * 60;
 
   // --- GESTIONE AUTH (Invariato) ---
   useEffect(() => {
@@ -159,7 +156,6 @@ export default function App() {
       weight: 10,
       currency,
     };
-    // Evita di aggiungere lo stesso Ticker più volte
     if (!assets.some((a) => a.ticker === ticker)) {
       setAssets((prev) => [...prev, newAsset]);
     }
@@ -196,7 +192,6 @@ export default function App() {
         const fxData: Record<string, PricePoint[]> = {};
         const now = Date.now();
 
-        // 1. Scarica i prezzi degli ASSET
         for (const asset of assets) {
           if (!asset.ticker) continue;
           const key = `${asset.ticker}_${asset.currency}_${days}`;
@@ -218,7 +213,6 @@ export default function App() {
           }
         }
 
-        // 2. Scarica le serie storiche FX necessarie
         const requiredFxPairs = new Set<string>(
           assets.map(a => `${a.currency}-${currency}`)
         );
@@ -242,7 +236,6 @@ export default function App() {
           }
         }
 
-        // 3. Calcola il portfolio
         const series = computeNavSeries(
           priceData,
           fxData, 
@@ -418,11 +411,12 @@ export default function App() {
 
 
         <main className="max-w-7xl mx-auto px-6 py-8">
-          {/* *** MODIFICA: Griglia principale *** */}
+          {/* *** MODIFICA: Griglia principale RISTRUTTURATA *** */}
+          {/* Ora è una griglia a 4 blocchi, non 2 colonne */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
             
-            {/* --- COLONNA SINISTRA --- */}
-            <div className="lg:col-span-1 space-y-6">
+            {/* --- BLOCCO 1: Composizione (Riga 1, Col 1) --- */}
+            <div className="lg:col-span-1">
               <PortfolioComposition
                 assets={assets}
                 onAddAsset={handleAddAsset}
@@ -431,10 +425,8 @@ export default function App() {
               />
             </div>
 
-            {/* --- COLONNA DESTRA --- */}
-            <div className="lg:col-span-2 space-y-6">
-              
-              {/* Sezione PortfolioChart (invariata) */}
+            {/* --- BLOCCO 2: Grafico (Riga 1, Col 2) --- */}
+            <div className="lg:col-span-2">
               <div className="bg-white rounded-2xl border border-gray-200 shadow-lg p-6">
                 <div className="flex items-center justify-between mb-4">
                   <div>
@@ -492,84 +484,83 @@ export default function App() {
                   />
                 )}
               </div>
-              
-              {/* --- MODIFICA: Griglia delle metriche aggiornata --- */}
-              {/* Questa griglia ora divide l'area in 1/3 (BestWorst) e 2/3 (MetricCards) su desktop */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                
-                {/* --- CARD "ANNI" (SULLA SINISTRA) --- */}
-                <div className="lg:col-span-1">
-                  <BestWorstYearsCard data={histogramData} />
-                </div>
+            </div>
+            
+            {/* --- BLOCCO 3: Anni Migliori/Peggiori (Riga 2, Col 1) --- */}
+            <div className="lg:col-span-1">
+              <BestWorstYearsCard data={histogramData} />
+            </div>
 
-                {/* --- Griglia delle 6 card (SULLA DESTRA) --- */}
-                <div className="lg:col-span-2 grid grid-cols-2 sm:grid-cols-3 gap-4">
-                  <MetricsCard
-                    title="Rendimento Annuo"
-                    value={
-                      metrics.annualReturn !== null
-                        ? `${metrics.annualReturn >= 0 ? '+' : ''}${(
-                            metrics.annualReturn * 100
-                          ).toFixed(2)}%`
-                        : '—'
-                    }
-                    trend={
-                      metrics.annualReturn !== null && metrics.annualReturn >= 0
-                        ? 'positive'
-                        : 'negative'
-                    }
-                  />
-                  <MetricsCard
-                    title="Volatilità"
-                    value={
-                      metrics.annualVol !== null
-                        ? `${(metrics.annualVol * 100).toFixed(2)}%`
-                        : '—'
-                    }
-                  />
-                  <MetricsCard
-                    title="Sharpe Ratio"
-                    value={
-                      metrics.sharpe !== null ? metrics.sharpe.toFixed(2) : '—'
-                    }
-                    trend={
-                      metrics.sharpe !== null && metrics.sharpe > 1
-                        ? 'positive'
-                        : 'neutral'
-                    }
-                  />
-                  <MetricsCard
-                    title="VaR (1Y, 95%)"
-                    value={
-                      metrics.var95 !== null
-                        ? `${(metrics.var95 * 100).toFixed(2)}%`
-                        : '—'
-                    }
-                  />
-                  <MetricsCard
-                    title="CVaR (95%)"
-                    value={
-                      metrics.cvar95 !== null
-                        ? `${(metrics.cvar95 * 100).toFixed(2)}%`
-                        : '—'
-                    }
-                  />
-                  <MetricsCard
-                    title="Valore Finale"
-                    value={
-                      metrics.finalValue !== null
-                        ? 
-                        `${
-                            EXCHANGE_RATES[currency]?.symbol || currency
-                          }${(metrics.finalValue / 1000).toFixed(1)}k`
-                        : '—'
-                    }
-                  />
-                </div>
+            {/* --- BLOCCO 4: 6 MetricCards (Riga 2, Col 2) --- */}
+            <div className="lg:col-span-2">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                <MetricsCard
+                  title="Rendimento Annuo"
+                  value={
+                    metrics.annualReturn !== null
+                      ? `${metrics.annualReturn >= 0 ? '+' : ''}${(
+                          metrics.annualReturn * 100
+                        ).toFixed(2)}%`
+                      : '—'
+                  }
+                  trend={
+                    metrics.annualReturn !== null && metrics.annualReturn >= 0
+                      ? 'positive'
+                      : 'negative'
+                  }
+                />
+                <MetricsCard
+                  title="Volatilità"
+                  value={
+                    metrics.annualVol !== null
+                      ? `${(metrics.annualVol * 100).toFixed(2)}%`
+                      : '—'
+                  }
+                />
+                <MetricsCard
+                  title="Sharpe Ratio"
+                  value={
+                    metrics.sharpe !== null ? metrics.sharpe.toFixed(2) : '—'
+                  }
+                  trend={
+                    metrics.sharpe !== null && metrics.sharpe > 1
+                      ? 'positive'
+                      : 'neutral'
+                  }
+                />
+                <MetricsCard
+                  title="VaR (1Y, 95%)"
+                  value={
+                    metrics.var95 !== null
+                      ? `${(metrics.var95 * 100).toFixed(2)}%`
+                      : '—'
+                  }
+                />
+                <MetricsCard
+                  title="CVaR (95%)"
+                  value={
+                    metrics.cvar95 !== null
+                      ? `${(metrics.cvar95 * 100).toFixed(2)}%`
+                      : '—'
+                  }
+                />
+                <MetricsCard
+                  title="Valore Finale"
+                  value={
+                    metrics.finalValue !== null
+                      ? 
+                      `${
+                          EXCHANGE_RATES[currency]?.symbol || currency
+                        }${(metrics.finalValue / 1000).toFixed(1)}k`
+                      : '—'
+                  }
+                />
               </div>
             </div>
-            {/* --- FINE GRIGLIA PRINCIPALE --- */}
+            
           </div>
+          {/* --- FINE GRIGLIA PRINCIPALE --- */}
+
 
           {/* ... (Istogramma e Footer invariati) ... */}
           <div className="bg-white rounded-2xl border border-gray-200 shadow-lg p-6">
