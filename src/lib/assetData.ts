@@ -6,36 +6,36 @@ import { supabase } from './supabase'; // Importa il client Supabase
  * di dati sintetici se la ricerca API fallisce.
  */
 export const ISIN_TO_TICKER: Record<string, string> = {
-  'US0378331005': 'AAPL',
-  'US5949181045': 'MSFT',
-  'US02079K3059': 'GOOGL',
-  'US0231351067': 'AMZN',
-  'US88160R1014': 'TSLA',
+  'US0378331005': 'AAPL.US', // EODHD usa .US
+  'US5949181045': 'MSFT.US',
+  'US02079K3059': 'GOOGL.US',
+  'US0231351067': 'AMZN.US',
+  'US88160R1014': 'TSLA.US',
   'IT0003132476': 'ENI.MI',
   'IE00B4L5Y983': 'IWDA.AS',
-  'US0846707026': 'BRK.B',
-  'US46625H1005': 'JPM',
-  'US91324P1021': 'UNH',
+  'US0846707026': 'BRK-B.US', // BRK.B -> BRK-B.US
+  'US46625H1005': 'JPM.US',
+  'US91324P1021': 'UNH.US',
   'IE00B0M62Q58': 'IWD.AS',
   'IE00B4L5Y999': 'IEMG.AS',
   'IE00B1FZS350': 'QQQ.L',
   'IE00B5BMR087': 'VUSA.AS',
   'IE00B3RBWM25': 'VEVE.AS',
-  'US4642872000': 'SPY',
-  'US78462F1030': 'PYPL',
+  'US4642872000': 'SPY.US',
+  'US78462F1030': 'PYPL.US',
   'GB00B03MLX29': 'HSBA.L',
-  'US9311421039': 'V',
+  'US9311421039': 'V.US',
   'FR0000120271': 'BNP.PA',
   'DE000BASF111': 'BAS.DE',
-  'JP3435000009': 'SONY',
+  'JP3435000009': 'SONY.US', // Sony quotato US
   'CH0038863350': 'NESN.SW',
-  'US78463V1070': 'GLD',
-  'US78464Y4090': 'SLV',
-  'US912810FH35': 'USO',
-  'US912810JA50': 'UNG',
-  'US4642882799': 'DBC',
-  'CRYPTO:BTC': 'BTC',
-  'CRYPTO:ETH': 'ETH',
+  'US78463V1070': 'GLD.US',
+  'US78464Y4090': 'SLV.US',
+  'US912810FH35': 'USO.US',
+  'US912810JA50': 'UNG.US',
+  'US4642882799': 'DBC.US',
+  'CRYPTO:BTC': 'BTC-USD', // Crypto
+  'CRYPTO:ETH': 'ETH-USD',
 };
 
 /**
@@ -43,17 +43,17 @@ export const ISIN_TO_TICKER: Record<string, string> = {
  * per la generazione di dati sintetici.
  */
 export const ASSET_DATABASE: Record<string, { name: string; annualReturn: number; volatility: number; currency: string }> = {
-  // Azioni
-  'AAPL': { name: 'Apple Inc.', annualReturn: 0.20, volatility: 0.30, currency: 'USD' },
-  'MSFT': { name: 'Microsoft Corp.', annualReturn: 0.18, volatility: 0.25, currency: 'USD' },
-  'GOOGL': { name: 'Alphabet Inc.', annualReturn: 0.17, volatility: 0.28, currency: 'USD' },
-  'AMZN': { name: 'Amazon.com Inc.', annualReturn: 0.16, volatility: 0.33, currency: 'USD' },
-  'TSLA': { name: 'Tesla Inc.', annualReturn: 0.30, volatility: 0.60, currency: 'USD' },
+  // Azioni (aggiornati a EODHD)
+  'AAPL.US': { name: 'Apple Inc.', annualReturn: 0.20, volatility: 0.30, currency: 'USD' },
+  'MSFT.US': { name: 'Microsoft Corp.', annualReturn: 0.18, volatility: 0.25, currency: 'USD' },
+  'GOOGL.US': { name: 'Alphabet Inc.', annualReturn: 0.17, volatility: 0.28, currency: 'USD' },
+  'AMZN.US': { name: 'Amazon.com Inc.', annualReturn: 0.16, volatility: 0.33, currency: 'USD' },
+  'TSLA.US': { name: 'Tesla Inc.', annualReturn: 0.30, volatility: 0.60, currency: 'USD' },
   'ENI.MI': { name: 'Eni SpA', annualReturn: 0.05, volatility: 0.22, currency: 'EUR' },
   'IWDA.AS': { name: 'iShares MSCI World', annualReturn: 0.09, volatility: 0.16, currency: 'EUR' },
-  'BRK.B': { name: 'Berkshire Hathaway', annualReturn: 0.14, volatility: 0.22, currency: 'USD' },
-  'JPM': { name: 'JPMorgan Chase', annualReturn: 0.12, volatility: 0.28, currency: 'USD' },
-  'UNH': { name: 'UnitedHealth Group', annualReturn: 0.15, volatility: 0.24, currency: 'USD' },
+  'BRK-B.US': { name: 'Berkshire Hathaway', annualReturn: 0.14, volatility: 0.22, currency: 'USD' },
+  'JPM.US': { name: 'JPMorgan Chase', annualReturn: 0.12, volatility: 0.28, currency: 'USD' },
+  'UNH.US': { name: 'UnitedHealth Group', annualReturn: 0.15, volatility: 0.24, currency: 'USD' },
 
   // ETF
   'IWD.AS': { name: 'iShares MSCI World Value', annualReturn: 0.08, volatility: 0.18, currency: 'EUR' },
@@ -61,24 +61,24 @@ export const ASSET_DATABASE: Record<string, { name: string; annualReturn: number
   'QQQ.L': { name: 'Invesco QQQ ETF', annualReturn: 0.19, volatility: 0.30, currency: 'USD' },
   'VUSA.AS': { name: 'Vanguard S&P 500 UCITS', annualReturn: 0.15, volatility: 0.20, currency: 'EUR' },
   'VEVE.AS': { name: 'Vanguard FTSE Developed Europe', annualReturn: 0.08, volatility: 0.16, currency: 'EUR' },
-  'SPY': { name: 'SPDR S&P 500 ETF', annualReturn: 0.15, volatility: 0.22, currency: 'USD' },
+  'SPY.US': { name: 'SPDR S&P 500 ETF', annualReturn: 0.15, volatility: 0.22, currency: 'USD' },
 
   // Materie prime
-  'GLD': { name: 'SPDR Gold Trust', annualReturn: 0.08, volatility: 0.18, currency: 'USD' },
-  'SLV': { name: 'iShares Silver Trust', annualReturn: 0.06, volatility: 0.25, currency: 'USD' },
-  'USO': { name: 'United States Oil Fund', annualReturn: 0.10, volatility: 0.45, currency: 'USD' },
-  'UNG': { name: 'United States Natural Gas Fund', annualReturn: 0.12, volatility: 0.50, currency: 'USD' },
-  'DBC': { name: 'Invesco Commodity Index', annualReturn: 0.07, volatility: 0.35, currency: 'USD' },
+  'GLD.US': { name: 'SPDR Gold Trust', annualReturn: 0.08, volatility: 0.18, currency: 'USD' },
+  'SLV.US': { name: 'iShares Silver Trust', annualReturn: 0.06, volatility: 0.25, currency: 'USD' },
+  'USO.US': { name: 'United States Oil Fund', annualReturn: 0.10, volatility: 0.45, currency: 'USD' },
+  'UNG.US': { name: 'United States Natural Gas Fund', annualReturn: 0.12, volatility: 0.50, currency: 'USD' },
+  'DBC.US': { name: 'Invesco Commodity Index', annualReturn: 0.07, volatility: 0.35, currency: 'USD' },
 
   // Crypto
-  'BTC': { name: 'Bitcoin', annualReturn: 0.80, volatility: 0.90, currency: 'USD' },
-  'ETH': { name: 'Ethereum', annualReturn: 0.75, volatility: 0.85, currency: 'USD' },
-  'BNB': { name: 'Binance Coin', annualReturn: 0.60, volatility: 0.80, currency: 'USD' },
+  'BTC-USD': { name: 'Bitcoin', annualReturn: 0.80, volatility: 0.90, currency: 'USD' },
+  'ETH-USD': { name: 'Ethereum', annualReturn: 0.75, volatility: 0.85, currency: 'USD' },
 };
+
 
 /**
  * Tassi di cambio (statici) per la conversione.
- * In un'app di produzione, anche questi dovrebbero essere recuperati via API.
+ * Usati solo per la UI e come fallback se il fetch storico FX fallisce.
  */
 export const EXCHANGE_RATES: Record<string, { symbol: string; rateToEUR: number }> = {
   USD: { symbol: '$', rateToEUR: 0.92 },
@@ -97,8 +97,8 @@ export const EXCHANGE_RATES: Record<string, { symbol: string; rateToEUR: number 
 };
 
 /**
- * NUOVA FUNZIONE
  * Converte un valore da una valuta all'altra, usando EUR come pivot.
+ * (Usato solo per tassi statici)
  */
 export function getConversionRate(from: string, to: string): number {
   if (from === to) return 1;
@@ -107,35 +107,29 @@ export function getConversionRate(from: string, to: string): number {
   const rateTo = EXCHANGE_RATES[to]?.rateToEUR;
 
   if (!rateFrom || !rateTo) {
-    console.warn(`Tasso di cambio non trovato per ${from} o ${to}. Uso 1.`);
-    // Se una delle due valute è EUR e l'altra no, usa il tasso disponibile
+    console.warn(`Tasso di cambio statico non trovato per ${from} o ${to}. Uso 1.`);
     if (from === 'EUR' && rateTo) return 1 / rateTo;
     if (to === 'EUR' && rateFrom) return rateFrom;
-    // Altrimenti non possiamo calcolare
     return 1;
   }
-
-  // Tasso = (rateToEUR di FROM) / (rateToEUR di TO)
-  // Es: da USD a GBP: (USD/EUR) / (GBP/EUR) = (0.92 / 1.15) = 0.8
-  // Es: da EUR a USD: (EUR/EUR) / (USD/EUR) = (1 / 0.92) = 1.086
+  
   return rateFrom / rateTo;
 }
 
 
 /**
- * Cerca asset (Ticker, ISIN, Nome) tramite Supabase Edge Function.
+ * Cerca asset (Ticker, ISIN, Nome) tramite Supabase Edge Function (EODHD).
  */
 export async function searchAssets(query: string): Promise<AssetSuggestion[]> {
   if (!query || query.length < 2) return [];
 
   try {
-    // *** CORREZIONE: Invia i dati nel 'body' della richiesta POST ***
     const { data, error } = await supabase.functions.invoke('search-assets', {
       body: { query }
     });
 
     if (error) {
-      throw new Error(`Errore Edge Function: ${error.message}`);
+      throw new Error(`Errore Edge Function 'search-assets': ${error.message}`);
     }
 
     if (!Array.isArray(data)) {
@@ -218,22 +212,18 @@ export function generateSyntheticPrices(ticker: string, days: number = 365 * 3, 
 /**
  * Scarica i dati storici dei prezzi tramite Supabase Edge Function.
  * Esegue il fallback a `generateSyntheticPrices` in caso di errore.
- * Restituisce un oggetto con i dati e un flag che indica se sono sintetici.
  */
 export async function fetchPriceHistory(
   ticker: string,
   days: number = 365 * 5,
   currency: string = 'USD'
-): Promise<{ data: PricePoint[], isSynthetic: boolean }> { // Tipo di ritorno modificato
+): Promise<{ data: PricePoint[], isSynthetic: boolean }> { 
 
-  if (ticker.startsWith('CRYPTO:')) {
-     console.warn(`Ticker Crypto ${ticker} non supportato, uso dati sintetici.`);
-     // Restituisce dati sintetici con flag true
-     return { data: generateSyntheticPrices(ticker, days, currency), isSynthetic: true };
-  }
-
+  // EODHD usa "BTC-USD" per crypto, Yahoo usa "BTC-USD".
+  // Se usiamo EODHD per la ricerca, il ticker crypto dovrebbe essere corretto.
+  // La funzione fetch-prices (Yahoo) gestirà "BTC-USD"
+  
   try {
-    // *** MODIFICA: Passa 'days' nel body della chiamata ***
     const { data, error } = await supabase.functions.invoke('fetch-prices', {
       body: { ticker, currency, days }
     });
@@ -243,7 +233,7 @@ export async function fetchPriceHistory(
       if (errorMessage.includes('429') || errorMessage.includes('rate limit')) {
         throw new Error('API rate limit reached');
       }
-      throw new Error(`Errore Edge Function: ${error.message}`);
+      throw new Error(`Errore Edge Function 'fetch-prices': ${error.message}`);
     }
 
     if (!Array.isArray(data) || data.length === 0) {
@@ -251,12 +241,65 @@ export async function fetchPriceHistory(
     }
 
     console.log(`Dati reali caricati per ${ticker} da Edge Function.`);
-    // Restituisce i dati reali con flag false
     return { data: data, isSynthetic: false };
 
   } catch (e) {
     console.warn(`fetchPriceHistory(${ticker}) fallito, ripiego su dati sintetici. Errore: ${(e as Error).message}`);
-    // Restituisce dati sintetici con flag true in caso di errore
     return { data: generateSyntheticPrices(ticker, days, currency), isSynthetic: true };
+  }
+}
+
+/**
+ * *** NUOVA FUNZIONE ***
+ * Scarica la serie storica di un tasso di cambio.
+ */
+export async function fetchFxHistory(
+  from: string,
+  to: string,
+  days: number
+): Promise<PricePoint[]> {
+  
+  if (from === to) {
+    // Genera una serie "fittizia" con valore 1
+    const prices: PricePoint[] = [];
+    const today = new Date();
+    const startDate = new Date(today.getTime());
+    startDate.setDate(today.getDate() - days);
+    for (let i = 0; i <= days; i++) {
+       const t = new Date(startDate.getTime());
+       t.setDate(startDate.getDate() + i);
+       prices.push({ date: formatDate(t), close: 1, currency: to });
+    }
+    return prices;
+  }
+
+  try {
+    const { data, error } = await supabase.functions.invoke('fetch-fx-history', {
+      body: { from, to, days }
+    });
+
+    if (error) {
+      throw new Error(`Errore Edge Function 'fetch-fx-history': ${error.message}`);
+    }
+    if (!Array.isArray(data) || data.length === 0) {
+      throw new Error(`Nessun dato FX ricevuto per ${from}-${to}.`);
+    }
+    
+    console.log(`Dati FX caricati per ${from}-${to}`);
+    return data;
+  } catch (e) {
+    console.error(`fetchFxHistory(${from}, ${to}) fallito: ${(e as Error).message}`);
+    // Fallback catastrofico: usa il tasso statico per tutti i giorni
+    const staticRate = getConversionRate(from, to);
+    const prices: PricePoint[] = [];
+    const today = new Date();
+    const startDate = new Date(today.getTime());
+    startDate.setDate(today.getDate() - days);
+    for (let i = 0; i <= days; i++) {
+       const t = new Date(startDate.getTime());
+       t.setDate(startDate.getDate() + i);
+       prices.push({ date: formatDate(t), close: staticRate, currency: to });
+    }
+    return prices;
   }
 }
