@@ -7,6 +7,11 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+// API key trovata nel tuo file EDGE_FUNCTIONS.md
+const EODHD_API_KEY = '68fe793540ec48.53643271';
+// In produzione, sarebbe meglio usare:
+// const EODHD_API_KEY = Deno.env.get('EODHD_API_KEY') || 'YOUR_DEFAULT_KEY';
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, {
@@ -16,6 +21,7 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    // Legge il 'query' dal body, come si aspetta src/lib/assetData.ts
     const { query } = await req.json();
 
     if (!query || query.length < 2) {
@@ -28,71 +34,39 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    console.log(`Searching Yahoo Finance for: ${query}`);
+    console.log(`Searching EODHD for: ${query}`);
 
-    // Yahoo Finance search API (non ufficiale ma pubblico)
-    const apiUrl = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(query)}&quotesCount=10&newsCount=0`;
+    // API EODHD per la ricerca (come da EDGE_FUNCTIONS.md)
+    const apiUrl = `https://eodhistoricaldata.com/api/search/${encodeURIComponent(query)}?api_token=${EODHD_API_KEY}&fmt=json&limit=10`;
 
-    const response = await fetch(apiUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-      }
-    });
+    const response = await fetch(apiUrl);
 
     if (!response.ok) {
-      throw new Error(`Yahoo Finance returned ${response.status}`);
+      throw new Error(`EODHD returned ${response.status}`);
     }
 
     const data = await response.json();
 
-    if (!data.quotes || !Array.isArray(data.quotes)) {
+    if (!Array.isArray(data)) {
       return new Response(JSON.stringify([]), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Filtra solo azioni ed ETF
-    const validTypes = ['EQUITY', 'ETF', 'MUTUALFUND'];
+    // Mappa i risultati nel formato AssetSuggestion
+    // Nota: EODHD usa Code e Exchange per formare il ticker
+    const suggestions = data
+      .filter((item: any) => item.Code && item.Exchange && item.Currency && item.Name)
+      .map((item: any) => ({
+        ticker: `${item.Code}.${item.Exchange}`, 
+        isin: item.ISIN || undefined,
+        name: item.Name,
+        currency: item.Currency,
+      }));
     
-    const suggestions = data.quotes
-      .filter((item: any) => 
-        validTypes.includes(item.quoteType) && 
-        item.symbol && 
-        item.shortname
-      )
-      .map((item: any) => {
-        // Determina la valuta in base all'exchange
-        let currency = 'USD';
-        const exchange = item.exchange || '';
-        
-        if (exchange.includes('MIL') || item.symbol.endsWith('.MI')) {
-          currency = 'EUR'; // Milano
-        } else if (exchange.includes('AMS') || item.symbol.endsWith('.AS')) {
-          currency = 'EUR'; // Amsterdam
-        } else if (exchange.includes('PAR') || item.symbol.endsWith('.PA')) {
-          currency = 'EUR'; // Parigi
-        } else if (exchange.includes('FRA') || exchange.includes('GER') || item.symbol.endsWith('.DE')) {
-          currency = 'EUR'; // XETRA/Germania
-        } else if (exchange.includes('LSE') || item.symbol.endsWith('.L')) {
-          currency = 'GBP'; // Londra
-        } else if (exchange.includes('SWX') || item.symbol.endsWith('.SW')) {
-          currency = 'CHF'; // Svizzera
-        }
-
-        return {
-          ticker: item.symbol,
-          isin: undefined, // Yahoo Finance non fornisce ISIN
-          name: item.shortname || item.longname || item.symbol,
-          currency: currency,
-        };
-      });
-
-    // *** MODIFICA: Rimossa la de-duplicazione per ticker ***
-    // (Consente di mostrare lo stesso ISIN/ETF su più borse)
-
     console.log(`Found ${suggestions.length} results for "${query}"`);
 
-    return new Response(JSON.stringify(suggestions.slice(0, 8)), {
+    return new Response(JSON.stringify(suggestions), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
