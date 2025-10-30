@@ -44,7 +44,7 @@ Deno.serve(async (req: Request) => {
       '.DE': '.DE',    // XETRA
       '.PA': '.PA',    // Parigi
       '.SW': '.SW',    // Svizzera
-      '.AMS': '.AS',   // Amsterdam alternativo
+      '.AMS': '.AS',   // Amsterdam alternativo (mappato a .AS)
     };
 
     let hasSuffix = false;
@@ -129,7 +129,7 @@ Deno.serve(async (req: Request) => {
         prices.push({
           date: dateStr,
           close: parseFloat(closePrice.toFixed(4)),
-          currency: currency,
+          currency: currency, // La valuta richiesta dal client (valuta natia dell'asset)
         });
       }
     }
