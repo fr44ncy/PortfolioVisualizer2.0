@@ -1,0 +1,581 @@
+// src/App.tsx
+
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  TrendingUp,
+  AlertCircle,
+  Save,
+  BookMarked,
+  LogOut,
+  Loader2,
+  User, // Aggiunta icona utente
+} from 'lucide-react';
+import { Asset, NavPoint, PricePoint, PortfolioMetrics } from './types';
+import PortfolioComposition from './components/PortfolioComposition';
+import PortfolioChart from './components/PortfolioChart';
+import ReturnsHistogram from './components/ReturnsHistogram';
+import MetricsCard from './components/MetricsCard';
+// *** MODIFICA: Importa il tuo AuthModal ***
+import AuthModal from './components/AuthModal'; 
+import SavedPortfoliosModal from './components/SavedPortfoliosModal';
+import { supabase } from './lib/supabase';
+import { Session } from '@supabase/supabase-js';
+import { fetchPriceHistory } from './lib/assetData';
+import {
+  computeNavSeries,
+  calculateMetrics,
+  calculateAnnualReturns,
+} from './lib/portfolioCalculations';
+
+function uid() {
+  return Math.random().toString(36).slice(2, 9);
+}
+
+const emptyMetrics: PortfolioMetrics = {
+  annualReturn: null,
+  annualVol: null,
+  sharpe: null,
+  var95: null,
+  cvar95: null,
+  finalValue: null,
+};
+
+export default function App() {
+  // --- STATI ESISTENTI ---
+  const [assets, setAssets] = useState<Asset[]>([]);
+  const [currency, setCurrency] = useState<string>('EUR');
+  const [initialCapital, setInitialCapital] = useState<number>(100000);
+  const [backtestYears, setBacktestYears] = useState<number>(5);
+  const [scale, setScale] = useState<'linear' | 'log'>('linear');
+  const [navSeries, setNavSeries] = useState<NavPoint[]>([]);
+  const [metrics, setMetrics] = useState<PortfolioMetrics>(emptyMetrics);
+  const [histogramData, setHistogramData] = useState<
+    { year: string; return: number }[]
+  >([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  
+  // --- NUOVI STATI PER AUTH E SALVATAGGIO ---
+  const [session, setSession] = useState<Session | null>(null);
+  const [showAuthModal, setShowAuthModal] = useState(false); // Per il tuo modal
+  const [showLoadModal, setShowLoadModal] = useState(false); // Per il modal "carica"
+  const [isSaving, setIsSaving] = useState(false);
+  const [portfolioName, setPortfolioName] = useState('Il Mio Portafoglio');
+
+  const priceCache = useRef<Record<string, { data: PricePoint[]; timestamp: number }>>({});
+  const CACHE_TTL = 1000 * 60 * 60; // 1 ora
+
+  // --- GESTIONE AUTH ---
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      // Chiudi il modale di login automaticamente dopo un login/registrazione
+      if (session) {
+        setShowAuthModal(false);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // --- FUNZIONI AUTH E CRUD ---
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+  };
+
+  const handleSavePortfolio = async () => {
+    if (!session?.user) {
+      // *** MODIFICA: Mostra il tuo modal di login ***
+      setShowAuthModal(true);
+      return;
+    }
+    if (assets.length === 0) {
+      alert('Aggiungi almeno un asset prima di salvare.');
+      return;
+    }
+
+    const name = window.prompt('Dai un nome al tuo portafoglio:', portfolioName);
+    if (!name) return; // L'utente ha annullato
+
+    setIsSaving(true);
+    try {
+      // 1. Salva il portafoglio
+      const { data: portfolioData, error: portfolioError } = await supabase
+        .from('portfolios')
+        .insert({
+          name: name,
+          user_id: session.user.id,
+          currency: currency,
+          initial_capital: initialCapital,
+        })
+        .select()
+        .single();
+
+      if (portfolioError) throw portfolioError;
+
+      // 2. Prepara gli asset da salvare
+      const assetsToSave = assets.map((asset) => ({
+        portfolio_id: portfolioData.id,
+        ticker: asset.ticker,
+        isin: asset.isin,
+        weight: asset.weight,
+        currency: asset.currency, // Salva la valuta!
+      }));
+
+      // 3. Salva gli asset
+      const { error: assetsError } = await supabase
+        .from('portfolio_assets')
+        .insert(assetsToSave);
+
+      if (assetsError) throw assetsError;
+      
+      setPortfolioName(name); // Aggiorna il nome attuale
+      alert(`Portafoglio "${name}" salvato con successo!`);
+      
+    } catch (error: any) {
+      alert(`Errore nel salvataggio: ${error.message}`);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleLoadPortfolio = (
+    loadedAssets: Asset[],
+    config: { capital: number; currency: string; name: string }
+  ) => {
+    // Ricrea gli ID locali per il client React
+    const assetsWithLocalIds = loadedAssets.map((asset) => ({
+      ...asset,
+      id: uid(),
+    }));
+    
+    setAssets(assetsWithLocalIds);
+    setInitialCapital(config.capital);
+    setCurrency(config.currency);
+    setPortfolioName(config.name);
+    
+    setShowLoadModal(false);
+  };
+
+  // --- FUNZIONI ESISTENTI (invariate) ---
+  const handleAddAsset = (
+    ticker: string,
+    isin: string | undefined,
+    currency: string
+  ) => {
+    const newAsset: Asset = {
+      id: uid(),
+      ticker,
+      isin,
+      weight: 10,
+      currency,
+    };
+    if (!assets.some((a) => a.ticker === ticker)) {
+      setAssets((prev) => [...prev, newAsset]);
+    }
+  };
+
+  const handleRemoveAsset = (id: string) => {
+    setAssets((prev) => prev.filter((a) => a.id !== id));
+  };
+
+  const handleUpdateWeight = (id: string, weight: number) => {
+    setAssets((prev) =>
+      prev.map((a) =>
+        a.id === id ? { ...a, weight: Math.max(0, Math.min(100, weight)) } : a
+      )
+    );
+  };
+
+  // --- USE EFFECT (Logica di calcolo) ---
+  useEffect(() => {
+    const calculatePortfolio = async () => {
+      if (assets.length === 0) {
+        setNavSeries([]);
+        setMetrics(emptyMetrics);
+        setHistogramData([]);
+        setError(null);
+        return;
+      }
+      setLoading(true);
+      setError(null);
+
+      try {
+        const days = backtestYears * 365;
+        const priceData: Record<string, PricePoint[]> = {};
+        const now = Date.now();
+        const cacheKey = (ticker: string) =>
+          `${ticker}_${backtestYears}_${currency}`;
+
+        for (const asset of assets) {
+          if (!asset.ticker) continue;
+          const key = cacheKey(asset.ticker);
+          const cached = priceCache.current[key];
+          if (cached && now - cached.timestamp < CACHE_TTL) {
+            priceData[asset.ticker] = cached.data;
+            continue;
+          }
+          const result = await fetchPriceHistory(
+            asset.ticker,
+            days,
+            asset.currency
+          );
+          if (!result.data || result.data.length === 0) {
+            throw new Error(
+              `Nessun dato disponibile per ${asset.ticker}. Verifica che il ticker sia corretto.`
+            );
+          }
+          priceCache.current[key] = {
+            data: result.data,
+            timestamp: now,
+          };
+          priceData[asset.ticker] = result.data;
+        }
+
+        const series = computeNavSeries(priceData, assets, initialCapital, currency);
+        if (series.length < 2) {
+          throw new Error(
+            'Dati insufficienti per il calcolo. Prova ad aumentare il periodo di backtest o cambia asset.'
+          );
+        }
+
+        setNavSeries(series);
+        const calculatedMetrics = calculateMetrics(series);
+        setMetrics(calculatedMetrics);
+        
+        const annualReturnsData = calculateAnnualReturns(series);
+        setHistogramData(annualReturnsData);
+
+      } catch (err) {
+        const errorMessage =
+          err instanceof Error ? err.message : 'Errore sconosciuto';
+        console.error('Errore calcolo portfolio:', errorMessage);
+        setError(errorMessage);
+        setNavSeries([]);
+        setMetrics(emptyMetrics);
+        setHistogramData([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    calculatePortfolio();
+  }, [assets, initialCapital, backtestYears, currency]);
+
+  // --- RENDER (con header modificato) ---
+  return (
+    <>
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
+        <header className="bg-white border-b border-gray-200 shadow-sm">
+          <div className="max-w-7xl mx-auto px-6 py-5">
+            <div className="flex items-center justify-between gap-4">
+              {/* Logo e Titolo */}
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg">
+                  <TrendingUp className="w-7 h-7 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+                    Portfolio Analyzer
+                  </h1>
+                </div>
+              </div>
+
+              {/* Controlli e Auth (Zona Account) */}
+              <div className="flex items-center gap-2">
+                
+                {/* Controlli Portfolio */}
+                <div className="flex items-center gap-2 bg-gray-50 px-3 py-2 rounded-lg border border-gray-200">
+                  <label className="text-sm text-gray-700 font-medium">Capitale</label>
+                  <input
+                    type="number"
+                    value={initialCapital}
+                    onChange={(e) => setInitialCapital(Number(e.target.value))}
+                    className="w-24 px-2 py-1 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div className="flex items-center gap-2 bg-gray-50 px-3 py-2 rounded-lg border border-gray-200">
+                  <label className="text-sm text-gray-700 font-medium">Periodo</label>
+                  <select
+                    value={backtestYears}
+                    onChange={(e) => setBacktestYears(Number(e.target.value))}
+                    className="px-2 py-1 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                  >
+                    <option value={1}>1 anno</option>
+                    <option value={2}>2 anni</option>
+                    <option value_={3}>3 anni</option>
+                    <option value={5}>5 anni</option>
+                    <option value={10}>10 anni</option>
+                    <option value={15}>15 anni</option>
+                    <option value={20}>20 anni</option>
+                    <option value={30}>30 anni</option>
+                  </select>
+                </div>
+                <div className="flex items-center gap-2 bg-gray-50 px-3 py-2 rounded-lg border border-gray-200">
+                  <label className="text-sm text-gray-700 font-medium">Valuta</label>
+                  <select
+                    value={currency}
+                    onChange={(e) => setCurrency(e.target.value)}
+                    className="px-2 py-1 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                  >
+                    <option value="EUR">EUR €</option>
+                    <option value="USD">USD $</option>
+                    <option value="GBP">GBP £</option>
+                  </select>
+                </div>
+
+                {/* Zona Account (Auth) */}
+                <div className="h-10 border-l border-gray-200 mx-3"></div>
+
+                {!session ? (
+                  // *** MODIFICA: Mostra pulsante per aprire il tuo AuthModal ***
+                  <button
+                    onClick={() => setShowAuthModal(true)}
+                    className="flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg shadow-sm hover:bg-gray-50"
+                  >
+                    <User className="w-4 h-4" />
+                    Accedi per Salvare
+                  </button>
+                ) : (
+                  // *** MODIFICA: Mostra i pulsanti per utente loggato ***
+                  <div className="flex items-center gap-2">
+                    <div className="text-right hidden sm:block">
+                      <div className="text-sm font-medium text-gray-800">
+                        {session.user.email?.split('@')[0]}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {session.user.email}
+                      </div>
+                    </div>
+                    
+                    <button
+                      onClick={handleSavePortfolio}
+                      disabled={isSaving}
+                      className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg shadow-sm hover:bg-blue-700 disabled:opacity-50"
+                    >
+                      {isSaving ? (
+                         <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                         <Save className="w-4 h-4" />
+                      )}
+                      Salva
+                    </button>
+                    
+                    <button
+                      onClick={() => setShowLoadModal(true)}
+                      className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg shadow-sm hover:bg-gray-50"
+                    >
+                      <BookMarked className="w-4 h-4" />
+                      Portafogli
+                    </button>
+
+                    <button
+                      onClick={handleLogout}
+                      title="Logout"
+                      className="p-2 text-gray-500 rounded-lg hover:bg-gray-100 hover:text-red-600"
+                    >
+                      <LogOut className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+
+              </div>
+            </div>
+            
+            <div className="flex justify-end mt-4">
+               <div className="flex items-center gap-2 bg-gray-50 px-3 py-2 rounded-lg border border-gray-200">
+                  <label className="text-sm text-gray-700 font-medium">Scala Grafico</label>
+                  <select
+                    value={scale}
+                    onChange={(e) => setScale(e.target.value as 'linear' | 'log')}
+                    className="px-2 py-1 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                  >
+                    <option value="linear">Lineare</option>
+                    <option value="log">Logaritmica</option>
+                  </select>
+                </div>
+            </div>
+
+          </div>
+        </header>
+
+        <main className="max-w-7xl mx-auto px-6 py-8">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+            <div className="lg:col-span-1">
+              <PortfolioComposition
+                assets={assets}
+                onAddAsset={handleAddAsset}
+                onRemoveAsset={handleRemoveAsset}
+                onUpdateWeight={handleUpdateWeight}
+              />
+            </div>
+            <div className="lg:col-span-2 space-y-6">
+              <div className="bg-white rounded-2xl border border-gray-200 shadow-lg p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    {/* *** MODIFICA: Mostra il nome del portafoglio *** */}
+                    <h2 className="text-xl font-bold text-gray-900">
+                      Valore Portfolio: {portfolioName}
+                    </h2>
+                    <p className="text-sm text-gray-600 mt-1">
+                      Performance storica negli ultimi {backtestYears}{' '}
+                      {backtestYears === 1 ? 'anno' : 'anni'}
+                    </p>
+                  </div>
+                  {metrics.annualReturn !== null && (
+                    <div className="text-right bg-gradient-to-br from-blue-50 to-indigo-50 px-6 py-3 rounded-xl border border-blue-200">
+                      <div className="text-xs font-medium text-gray-600 uppercase tracking-wide">
+                        Rendimento Annuo
+                      </div>
+                      <div
+                        className={`text-2xl font-bold mt-1 ${
+                          metrics.annualReturn >= 0
+                            ? 'text-green-600'
+                            : 'text-red-600'
+                        }`}
+                      >
+                        {metrics.annualReturn >= 0 ? '+' : ''}
+                        {(metrics.annualReturn * 100).toFixed(2)}%
+                      </div>
+                    </div>
+                  )}
+                </div>
+                {error && (
+                  <div className="flex items-start gap-3 text-sm px-5 py-4 rounded-xl mb-4 bg-red-50 text-red-700 border border-red-200">
+                    <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <div className="font-semibold">
+                        Errore nel caricamento dati
+                      </div>
+                      <div className="text-xs mt-1">{error}</div>
+                    </div>
+                  </div>
+                )}
+                {loading ? (
+                  <div className="h-80 flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl">
+                    <div className="text-center">
+                      <div className="inline-block w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-3"></div>
+                      <div className="text-sm font-medium text-gray-700">
+                        Caricamento dati di mercato...
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <PortfolioChart
+                    data={navSeries}
+                    currency={currency}
+                    scale={scale}
+                  />
+                )}
+              </div>
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+                <MetricsCard
+                  title="Rendimento Annuo"
+                  value={
+                    metrics.annualReturn !== null
+                      ? `${metrics.annualReturn >= 0 ? '+' : ''}${(
+                          metrics.annualReturn * 100
+                        ).toFixed(2)}%`
+                      : '—'
+                  }
+                  trend={
+                    metrics.annualReturn !== null && metrics.annualReturn >= 0
+                      ? 'positive'
+                      : 'negative'
+                  }
+                />
+                <MetricsCard
+                  title="Volatilità"
+                  value={
+                    metrics.annualVol !== null
+                      ? `${(metrics.annualVol * 100).toFixed(2)}%`
+                      : '—'
+                  }
+                />
+                <MetricsCard
+                  title="Sharpe Ratio"
+                  value={
+                    metrics.sharpe !== null ? metrics.sharpe.toFixed(2) : '—'
+                  }
+                  trend={
+                    metrics.sharpe !== null && metrics.sharpe > 1
+                      ? 'positive'
+                      : 'neutral'
+                  }
+                />
+                <MetricsCard
+                  title="VaR (1Y, 95%)"
+                  value={
+                    metrics.var95 !== null
+                      ? `${(metrics.var95 * 100).toFixed(2)}%`
+                      : '—'
+                  }
+                />
+                <MetricsCard
+                  title="CVaR (95%)"
+                  value={
+                    metrics.cvar95 !== null
+                      ? `${(metrics.cvar95 * 100).toFixed(2)}%`
+                      : '—'
+                  }
+                />
+                <MetricsCard
+                  title="Valore Finale"
+                  value={
+                    metrics.finalValue !== null
+                      ? `${
+                          currency === 'EUR' ? '€' : currency === 'USD' ? '$' : '£'
+                        }${(metrics.finalValue / 1000).toFixed(1)}k`
+                      : '—'
+                  }
+                />
+              </div>
+            </div>
+          </div>
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-lg p-6">
+            <h2 className="text-xl font-bold text-gray-900 mb-2">
+              Rendimenti Anno per Anno
+            </h2>
+            <p className="text-sm text-gray-600 mb-6">
+              Performance del portfolio per ogni anno solare nel periodo di backtest
+            </p>
+            {loading ? (
+              <div className="h-64 flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl">
+                <div className="text-sm text-gray-500">Caricamento...</div>
+              </div>
+            ) : (
+              <ReturnsHistogram data={histogramData} />
+            )}
+          </div>
+          <footer className="mt-8 text-center text-sm text-gray-600 bg-white rounded-xl py-4 border border-gray-200">
+            <p className="font-medium">
+              Dati forniti da Yahoo Finance
+            </p>
+            <p className="text-xs text-gray-500 mt-1">
+              Solo dati reali di mercato • Aggiornati giornalmente
+            </p>
+          </footer>
+        </main>
+      </div>
+
+      {/* Il modale per caricare i portafogli */}
+      <SavedPortfoliosModal
+        show={showLoadModal}
+        onClose={() => setShowLoadModal(false)}
+        onLoad={handleLoadPortfolio}
+      />
+      
+      {/* *** MODIFICA: Aggiunto il tuo AuthModal *** */}
+      {showAuthModal && (
+        <AuthModal onClose={() => setShowAuthModal(false)} />
+      )}
+    </>
+  );
+}
