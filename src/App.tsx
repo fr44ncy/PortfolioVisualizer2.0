@@ -15,11 +15,12 @@ import PortfolioComposition from './components/PortfolioComposition';
 import PortfolioChart from './components/PortfolioChart';
 import ReturnsHistogram from './components/ReturnsHistogram';
 import MetricsCard from './components/MetricsCard';
+// *** MODIFICA: Aggiunto BestWorstYearsCard ***
+import BestWorstYearsCard from './components/BestWorstYearsCard';
 import AuthModal from './components/AuthModal'; 
 import SavedPortfoliosModal from './components/SavedPortfoliosModal';
 import { supabase } from './lib/supabase';
 import { Session } from '@supabase/supabase-js';
-// *** MODIFICA: Importa fetchFxHistory e EXCHANGE_RATES ***
 import { fetchPriceHistory, fetchFxHistory, EXCHANGE_RATES } from './lib/assetData';
 import {
   computeNavSeries,
@@ -40,7 +41,6 @@ const emptyMetrics: PortfolioMetrics = {
   finalValue: null,
 };
 
-// *** MODIFICA: Cache separate per prezzi e FX ***
 type PriceCache = Record<string, { data: PricePoint[]; timestamp: number }>;
 
 export default function App() {
@@ -65,7 +65,6 @@ export default function App() {
   const [isSaving, setIsSaving] = useState(false);
   const [portfolioName, setPortfolioName] = useState('Il Mio Portafoglio');
 
-  // *** MODIFICA: Due cache separate ***
   const priceCache = useRef<PriceCache>({});
   const fxCache = useRef<PriceCache>({});
   const CACHE_TTL = 1000 * 60 * 60; // 1 ora
@@ -161,6 +160,7 @@ export default function App() {
       weight: 10,
       currency,
     };
+    // Evita di aggiungere lo stesso Ticker più volte
     if (!assets.some((a) => a.ticker === ticker)) {
       setAssets((prev) => [...prev, newAsset]);
     }
@@ -178,7 +178,7 @@ export default function App() {
     );
   };
 
-  // --- USE EFFECT (Logica di calcolo PRINCIPALE) ---
+  // --- USE EFFECT (Logica di calcolo) (Invariato) ---
   useEffect(() => {
     const calculatePortfolio = async () => {
       if (assets.length === 0) {
@@ -200,7 +200,6 @@ export default function App() {
         // 1. Scarica i prezzi degli ASSET
         for (const asset of assets) {
           if (!asset.ticker) continue;
-          // La chiave cache dipende solo dall'asset e dal periodo
           const key = `${asset.ticker}_${asset.currency}_${days}`;
           const cached = priceCache.current[key];
           
@@ -222,12 +221,12 @@ export default function App() {
 
         // 2. Scarica le serie storiche FX necessarie
         const requiredFxPairs = new Set<string>(
-          assets.map(a => `${a.currency}-${currency}`) // es. "USD-EUR"
+          assets.map(a => `${a.currency}-${currency}`)
         );
         
         for (const pair of requiredFxPairs) {
           const [from, to] = pair.split('-');
-          if (from === to) continue; // Non serve scaricare EUR-EUR
+          if (from === to) continue; 
 
           const fxKey = `${pair}_${days}`;
           const cachedFx = fxCache.current[fxKey];
@@ -247,10 +246,10 @@ export default function App() {
         // 3. Calcola il portfolio
         const series = computeNavSeries(
           priceData,
-          fxData, // Passa i dati FX storici
+          fxData, 
           assets,
           initialCapital,
-          currency // Valuta target
+          currency
         );
         
         if (series.length < 2) {
@@ -278,9 +277,9 @@ export default function App() {
     };
 
     calculatePortfolio();
-  }, [assets, initialCapital, backtestYears, currency]); // Ora 'currency' triggera un ricalcolo completo
+  }, [assets, initialCapital, backtestYears, currency]);
 
-  // --- RENDER (Invariato, ma ora le metriche cambieranno) ---
+  // --- RENDER ---
   return (
     <>
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
@@ -484,6 +483,8 @@ export default function App() {
                   />
                 )}
               </div>
+              
+              {/* *** MODIFICA: Griglia delle metriche aggiornata *** */}
               <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
                 <MetricsCard
                   title="Rendimento Annuo"
@@ -546,6 +547,13 @@ export default function App() {
                       : '—'
                   }
                 />
+
+                {/* --- CARD AGGIUNTA QUI --- */}
+                {/* Si estende su tutte le colonne (2 su mobile, 3 su lg) */}
+                <div className="col-span-2 lg:col-span-3">
+                  <BestWorstYearsCard data={histogramData} />
+                </div>
+                
               </div>
             </div>
           </div>
