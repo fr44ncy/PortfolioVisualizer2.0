@@ -15,7 +15,9 @@ import PortfolioComposition from './components/PortfolioComposition';
 import PortfolioChart from './components/PortfolioChart';
 import ReturnsHistogram from './components/ReturnsHistogram';
 import MetricsCard from './components/MetricsCard';
-import BestWorstYearsCard from './components/BestWorstYearsCard'; // Importato
+import BestWorstYearsCard from './components/BestWorstYearsCard'; 
+// *** MODIFICA: Importa il nuovo simulatore ***
+import MonteCarloSimulator from './components/MonteCarloSimulator';
 import AuthModal from './components/AuthModal'; 
 import SavedPortfoliosModal from './components/SavedPortfoliosModal';
 import { supabase } from './lib/supabase';
@@ -318,7 +320,7 @@ export default function App() {
                     <option value={5}>5 anni</option>
                     <option value={10}>10 anni</option>
                     <option value={15}>15 anni</option>
-                    <option value={20}>20 anni</option>
+                    <option valueP={20}>20 anni</option>
                     <option value={30}>30 anni</option>
                   </select>
                 </div>
@@ -411,8 +413,7 @@ export default function App() {
 
 
         <main className="max-w-7xl mx-auto px-6 py-8">
-          {/* *** MODIFICA: Griglia principale RISTRUTTURATA *** */}
-          {/* Ora è una griglia a 4 blocchi, non 2 colonne */}
+          {/* Griglia Principale a 4 blocchi */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
             
             {/* --- BLOCCO 1: Composizione (Riga 1, Col 1) --- */}
@@ -562,8 +563,8 @@ export default function App() {
           {/* --- FINE GRIGLIA PRINCIPALE --- */}
 
 
-          {/* ... (Istogramma e Footer invariati) ... */}
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-lg p-6">
+          {/* --- Istogramma (ora occupa tutta la larghezza) --- */}
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-lg p-6 mb-6">
             <h2 className="text-xl font-bold text-gray-900 mb-2">
               Rendimenti Anno per Anno
             </h2>
@@ -578,6 +579,16 @@ export default function App() {
               <ReturnsHistogram data={histogramData} />
             )}
           </div>
+
+          {/* *** MODIFICA: Aggiunta la card Monte Carlo qui sotto *** */}
+          <div className="mb-6">
+            <MonteCarloSimulator
+              metrics={metrics}
+              initialCapital={initialCapital}
+              currency={currency}
+            />
+          </div>
+
           <footer className="mt-8 text-center text-sm text-gray-600 bg-white rounded-xl py-4 border border-gray-200">
             <p className="font-medium">
               Dati forniti da EODHD (Ricerca) e Yahoo Finance (Prezzi)
