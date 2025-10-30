@@ -12,10 +12,11 @@ interface BestWorstYearsCardProps {
 }
 
 // Componente helper per una singola riga (Anno + Ritorno)
+// Stile compattato
 const YearRow = ({ year, ret }: { year: string, ret: number }) => (
-  <li className="flex justify-between items-center text-sm py-2 border-b border-gray-100 last:border-b-0">
+  <li className="flex justify-between items-center text-sm py-1.5 border-b border-gray-100 last:border-b-0">
     <span className="font-semibold text-gray-800">{year}</span>
-    <span className={`font-bold text-lg ${ret >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+    <span className={`font-bold ${ret >= 0 ? 'text-green-600' : 'text-red-600'}`}>
       {ret >= 0 ? '+' : ''}
       {(ret * 100).toFixed(1)}%
     </span>
@@ -32,41 +33,48 @@ export default function BestWorstYearsCard({ data }: BestWorstYearsCardProps) {
   if (hasEnoughData) {
     const sortedData = [...data].sort((a, b) => b.return - a.return);
     bestYears = sortedData.slice(0, 3);
-    worstYears = sortedData.slice(-3).reverse(); // Prende gli ultimi 3 e li inverte (il peggiore prima)
+    worstYears = sortedData.slice(-3).reverse(); // Prende gli ultimi 3 e li inverte
   }
 
   return (
-    <div className="bg-white p-6 rounded-2xl border-2 border-gray-200 shadow-lg h-full">
+    // Card con padding ridotto (p-5) e altezza piena
+    <div className="bg-white p-5 rounded-2xl border-2 border-gray-200 shadow-lg h-full">
       
       {!hasEnoughData ? (
-         <div className="flex items-center justify-center h-full min-h-[150px]">
+         // Testo centrato se non ci sono dati, altezza minima per allineamento
+         <div className="flex items-center justify-center h-full min-h-[250px] lg:min-h-full">
            <p className="text-sm text-center text-gray-400">
-             Dati insufficienti per calcolare gli anni migliori/peggiori.
+             Dati insufficienti per l'analisi.
            </p>
          </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+        // *** MODIFICA: Layout a colonna singola (rimosso grid-cols-2) ***
+        // Le due sezioni sono impilate verticalmente
+        <div>
           
-          {/* Colonna Anni Migliori */}
+          {/* Sezione Anni Migliori */}
           <div>
-            <div className="flex items-center gap-2 mb-3">
-              <Award className="w-6 h-6 text-green-500 flex-shrink-0" />
-              <h4 className="text-base font-bold text-gray-900">3 Anni Migliori</h4>
+            <div className="flex items-center gap-2 mb-2">
+              <Award className="w-5 h-5 text-green-500 flex-shrink-0" />
+              <h4 className="text-base font-bold text-gray-900">Anni Migliori</h4>
             </div>
-            <ul className="space-y-1">
+            <ul className="space-y-0.5">
               {bestYears.map((d) => (
                 <YearRow key={`best-${d.year}`} year={d.year} ret={d.return} />
               ))}
             </ul>
           </div>
           
-          {/* Colonna Anni Peggiori */}
+          {/* Divisore */}
+          <hr className="my-3 border-gray-200" />
+
+          {/* Sezione Anni Peggiori */}
           <div>
-            <div className="flex items-center gap-2 mb-3">
-              <AlertOctagon className="w-6 h-6 text-red-500 flex-shrink-0" />
-              <h4 className="text-base font-bold text-gray-900">3 Anni Peggiori</h4>
+            <div className="flex items-center gap-2 mb-2">
+              <AlertOctagon className="w-5 h-5 text-red-500 flex-shrink-0" />
+              <h4 className="text-base font-bold text-gray-900">Anni Peggiori</h4>
             </div>
-            <ul className="space-y-1">
+            <ul className="space-y-0.5">
               {worstYears.map((d) => (
                 <YearRow key={`worst-${d.year}`} year={d.year} ret={d.return} />
               ))}
