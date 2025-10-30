@@ -20,7 +20,8 @@ import AuthModal from './components/AuthModal';
 import SavedPortfoliosModal from './components/SavedPortfoliosModal';
 import { supabase } from './lib/supabase';
 import { Session } from '@supabase/supabase-js';
-import { fetchPriceHistory } from './lib/assetData';
+// *** MODIFICA: Importa EXCHANGE_RATES e fetchPriceHistory ***
+import { fetchPriceHistory, EXCHANGE_RATES } from './lib/assetData';
 import {
   computeNavSeries,
   calculateMetrics,
@@ -222,6 +223,7 @@ export default function App() {
             priceData[asset.ticker] = cached.data;
             continue;
           }
+          // *** MODIFICA: Passa 'days' a fetchPriceHistory ***
           const result = await fetchPriceHistory(
             asset.ticker,
             days,
@@ -239,6 +241,7 @@ export default function App() {
           priceData[asset.ticker] = result.data;
         }
 
+        // *** MODIFICA: Passa la valuta 'currency' (target) a computeNavSeries ***
         const series = computeNavSeries(priceData, assets, initialCapital, currency);
         if (series.length < 2) {
           throw new Error(
@@ -310,7 +313,7 @@ export default function App() {
                   >
                     <option value={1}>1 anno</option>
                     <option value={2}>2 anni</option>
-                    <option value_={3}>3 anni</option>
+                    <option value={3}>3 anni</option>
                     <option value={5}>5 anni</option>
                     <option value={10}>10 anni</option>
                     <option value={15}>15 anni</option>
@@ -328,6 +331,8 @@ export default function App() {
                     <option value="EUR">EUR €</option>
                     <option value="USD">USD $</option>
                     <option value="GBP">GBP £</option>
+                    {/* *** MODIFICA: Aggiunto CHF *** */}
+                    <option value="CHF">CHF</option>
                   </select>
                 </div>
 
@@ -530,8 +535,10 @@ export default function App() {
                   title="Valore Finale"
                   value={
                     metrics.finalValue !== null
-                      ? `${
-                          currency === 'EUR' ? '€' : currency === 'USD' ? '$' : '£'
+                      ? 
+                      /* *** MODIFICA: Usa EXCHANGE_RATES per il simbolo *** */
+                      `${
+                          EXCHANGE_RATES[currency]?.symbol || currency
                         }${(metrics.finalValue / 1000).toFixed(1)}k`
                       : '—'
                   }
