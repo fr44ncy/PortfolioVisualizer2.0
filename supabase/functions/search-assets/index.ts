@@ -8,9 +8,8 @@ const corsHeaders = {
 };
 
 // API key trovata nel tuo file EDGE_FUNCTIONS.md
+// In produzione, è meglio usare Deno.env.get('EODHD_API_KEY')
 const EODHD_API_KEY = '68fe793540ec48.53643271';
-// In produzione, sarebbe meglio usare:
-// const EODHD_API_KEY = Deno.env.get('EODHD_API_KEY') || 'YOUR_DEFAULT_KEY';
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -58,6 +57,7 @@ Deno.serve(async (req: Request) => {
     const suggestions = data
       .filter((item: any) => item.Code && item.Exchange && item.Currency && item.Name)
       .map((item: any) => ({
+        // EODHD format: "Ticker.Exchange" (es. "EMIM.AS" o "AAPL.US")
         ticker: `${item.Code}.${item.Exchange}`, 
         isin: item.ISIN || undefined,
         name: item.Name,
