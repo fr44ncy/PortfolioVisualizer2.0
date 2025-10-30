@@ -16,7 +16,6 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    // *** MODIFICA: Accetta 'days' dal body della richiesta ***
     const { ticker, currency: reqCurrency, days } = await req.json();
     const currency = reqCurrency || "USD";
 
@@ -30,10 +29,14 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Yahoo Finance usa diversi suffissi
     let yahooTicker = ticker;
     
-    // Mapping per exchange europei
+    // *** MODIFICA: Gestisce i ticker EODHD (es. "AAPL.US" -> "AAPL") ***
+    if (yahooTicker.endsWith('.US')) {
+      yahooTicker = yahooTicker.replace('.US', '');
+    }
+
+    // Mapping per exchange europei (Yahoo li richiede, EODHD li fornisce)
     const exchangeMap: Record<string, string> = {
       '.MI': '.MI',    // Milano
       '.AS': '.AS',    // Amsterdam
@@ -44,7 +47,6 @@ Deno.serve(async (req: Request) => {
       '.AMS': '.AS',   // Amsterdam alternativo
     };
 
-    // Controlla se il ticker ha già un suffisso
     let hasSuffix = false;
     for (const suffix of Object.keys(exchangeMap)) {
       if (ticker.endsWith(suffix)) {
@@ -58,7 +60,7 @@ Deno.serve(async (req: Request) => {
 
     console.log(`Fetching Yahoo Finance data for ${yahooTicker}...`);
 
-    // *** MODIFICA: Calcola data di inizio basandosi su 'days' ***
+    // Calcola date per periodo (usa 'days' fornito dal client)
     const endDate = Math.floor(Date.now() / 1000);
     const defaultDays = 20 * 365; // 20 anni (default)
     const periodDays = days ? Number(days) : defaultDays;
