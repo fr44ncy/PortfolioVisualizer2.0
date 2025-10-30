@@ -9,7 +9,7 @@ import {
 } from 'recharts';
 import { PortfolioMetrics } from '../types';
 import { formatCurrency } from '../lib/portfolioCalculations';
-import { Play, Loader2, Zap, LineChart as LineChartIcon, AreaChart as AreaChartIcon } from 'lucide-react'; // Importa icone per il toggle
+import { Play, Loader2, Zap, LineChart as LineChartIcon, AreaChart as AreaChartIcon } from 'lucide-react';
 
 interface MonteCarloSimulatorProps {
   metrics: PortfolioMetrics;
@@ -17,22 +17,31 @@ interface MonteCarloSimulatorProps {
   currency: string;
 }
 
+// Dati inviati dal worker
 type SimDataPoint = {
   year: number;
+  // Dati per Line chart
   moltoMale: number;
   cattivo: number;
   media: number;
   buono: number;
   grande: number;
+  // Dati per Area chart (stack)
+  base: number;
+  banda_5_25: number;
+  banda_25_75: number;
+  banda_75_95: number;
 };
 
-// Tooltip per GRAFICO A LINEE (come prima)
+// Tooltip per GRAFICO A LINEE
 const LineTooltip = ({ active, payload, label, currency }: any) => {
   if (active && payload && payload.length) {
+    // Filtra solo le linee visibili (non le aree)
+    const lines = payload.filter((p:any) => p.dataKey === 'moltoMale' || p.dataKey === 'cattivo' || p.dataKey === 'media' || p.dataKey === 'buono' || p.dataKey === 'grande');
     return (
       <div className="bg-white px-4 py-3 border border-gray-200 rounded-lg shadow-lg text-sm">
         <p className="text-xs text-gray-500 mb-2">Anno: {label}</p>
-        {payload.slice().reverse().map((entry: any) => (
+        {lines.slice().reverse().map((entry: any) => (
           <div key={entry.name} style={{ color: entry.color }} className="font-medium">
             {entry.name}: {formatCurrency(entry.value, currency)}
           </div>
@@ -43,21 +52,31 @@ const LineTooltip = ({ active, payload, label, currency }: any) => {
   return null;
 };
 
-// Tooltip per GRAFICO AD AREA (mostra solo la mediana)
-const AreaTooltip = ({ active, payload, label, currency }: any) => {
-  if (active && payload && payload.length) {
-    // Trova la mediana (che è l'unica linea)
-    const mediaEntry = payload.find((p: any) => p.dataKey === 'media');
-    const mediaValue = mediaEntry ? mediaEntry.value : null;
+// Tooltip per GRAFICO AD AREA (mostra la mediana e i range)
+const AreaTooltip = ({ active, payload, label, currency, data }: any) => {
+  if (active && label && data && data.length > 0) {
+    // Troviamo il punto dati completo per quest'anno
+    const dataPoint = data.find((d: SimDataPoint) => d.year === label);
+    if (!dataPoint) return null;
 
     return (
-      <div className="bg-white px-4 py-3 border border-gray-200 rounded-lg shadow-lg text-sm">
+      <div className="bg-white px-4 py-3 border border-gray-200 rounded-lg shadow-lg text-sm w-48">
         <p className="text-xs text-gray-500 mb-2">Anno: {label}</p>
-        {mediaValue !== null && (
-          <div style={{ color: '#0056b3' }} className="font-bold text-base">
-            Mediana: {formatCurrency(mediaValue, currency)}
+        
+        <div className="font-bold text-base text-blue-800 mb-2 pb-2 border-b">
+          Mediana: {formatCurrency(dataPoint.media, currency)}
+        </div>
+        
+        <div className="text-xs space-y-1">
+          <div className="flex justify-between">
+            <span className="text-gray-500">Range 25-75%:</span>
+            <span className="font-medium">{formatCurrency(dataPoint.cattivo, currency)} - {formatCurrency(dataPoint.buono, currency)}</span>
           </div>
-        )}
+          <div className="flex justify-between">
+            <span className="text-gray-500">Range 5-95%:</span>
+            <span className="font-medium">{formatCurrency(dataPoint.moltoMale, currency)} - {formatCurrency(dataPoint.grande, currency)}</span>
+          </div>
+        </div>
       </div>
     );
   }
@@ -76,7 +95,6 @@ export default function MonteCarloSimulator({
   const [numSimulations, setNumSimulations] = useState<number>(1000);
   const [simYears, setSimYears] = useState<number>(30);
   
-  // *** NUOVO STATO: per il tipo di grafico ***
   const [chartType, setChartType] = useState<'lines' | 'area'>('lines');
   
   const canRun = metrics.annualReturn !== null && metrics.annualVol !== null;
@@ -247,7 +265,8 @@ export default function MonteCarloSimulator({
             {chartType === 'area' && (
               <div className="relative w-full h-full"> {/* Container per il label */}
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={simulationData} margin={{ top: 5, right: 20, left: 0, bottom: 20 }}>
+                  {/* *** MODIFICA: Grafico ad Aree Impilate *** */}
+                  <AreaChart data={simulationData} margin={{ top: 5, right: 20, left: 0, bottom: 20 }} stackOffset="none">
                     <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                     <XAxis
                       dataKey="year"
@@ -260,32 +279,45 @@ export default function MonteCarloSimulator({
                       scale="linear"
                       domain={['auto', 'auto']}
                     />
-                    <Tooltip content={<AreaTooltip currency={currency} />} />
-                    <Legend verticalAlign="top" align="right" />
-
-                    {/* Banda Larga (5% - 95%) - Azzurro chiaro */}
-                    <Area 
-                      type="monotone" 
-                      dataKey={['moltoMale', 'grande']} // Definisce il range
-                      fill="#a0d8ff" // Azzurro chiaro
-                      stroke="none"
-                      fillOpacity={0.4}
-                      name="Range 5%-95%"
-                      isAnimationActive={false} // Animazione più fluida
-                    />
+                    <Tooltip content={<AreaTooltip currency={currency} data={simulationData} />} />
                     
-                    {/* Banda Stretta (25% - 75%) - Azzurro più scuro */}
+                    {/* Le Aree impilate. L'ordine è importante! */}
                     <Area 
                       type="monotone" 
-                      dataKey={['cattivo', 'buono']} // Definisce il range
+                      dataKey="base" // 0 -> 5%
+                      stackId="1" 
+                      stroke="none" 
+                      fill="#a0d8ff" // Azzurro chiaro
+                      fillOpacity={0.4}
+                      name="Range 5-95%" // Nome per la legenda (condiviso)
+                    />
+                    <Area 
+                      type="monotone" 
+                      dataKey="banda_5_25" // 5% -> 25%
+                      stackId="1" 
+                      stroke="none" 
+                      fill="#a0d8ff" // Azzurro chiaro
+                      fillOpacity={0.4}
+                    />
+                    <Area 
+                      type="monotone" 
+                      dataKey="banda_25_75" // 25% -> 75%
+                      stackId="1" 
+                      stroke="none" 
                       fill="#40a9ff" // Azzurro medio
-                      stroke="none"
                       fillOpacity={0.6}
-                      name="Range 25%-75%"
-                      isAnimationActive={false}
+                      name="Range 25-75%"
+                    />
+                     <Area 
+                      type="monotone" 
+                      dataKey="banda_75_95" // 75% -> 95%
+                      stackId="1" 
+                      stroke="none" 
+                      fill="#a0d8ff" // Azzurro chiaro
+                      fillOpacity={0.4}
                     />
 
-                    {/* Linea Mediana (50%) */}
+                    {/* La Linea Mediana viene disegnata sopra le aree */}
                     <Line 
                       type="monotone" 
                       dataKey="media" 
@@ -293,8 +325,11 @@ export default function MonteCarloSimulator({
                       stroke="#0056b3" // Blu scuro
                       strokeWidth={2} 
                       dot={false}
-                      isAnimationActive={false}
                     />
+
+                    {/* La Legenda ora mostrerà i 3 nomi corretti */}
+                    <Legend verticalAlign="top" align="right" />
+                    
                   </AreaChart>
                 </ResponsiveContainer>
                 {/* Etichetta numero simulazioni */}
