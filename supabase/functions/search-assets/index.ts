@@ -87,17 +87,12 @@ Deno.serve(async (req: Request) => {
         };
       });
 
-    // Rimuovi duplicati per ticker
-    const uniqueTickers = new Set<string>();
-    const uniqueSuggestions = suggestions.filter((s: any) => {
-      if (uniqueTickers.has(s.ticker)) return false;
-      uniqueTickers.add(s.ticker);
-      return true;
-    });
+    // *** MODIFICA: Rimossa la de-duplicazione per ticker ***
+    // (Consente di mostrare lo stesso ISIN/ETF su più borse)
 
-    console.log(`Found ${uniqueSuggestions.length} results for "${query}"`);
+    console.log(`Found ${suggestions.length} results for "${query}"`);
 
-    return new Response(JSON.stringify(uniqueSuggestions.slice(0, 8)), {
+    return new Response(JSON.stringify(suggestions.slice(0, 8)), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
