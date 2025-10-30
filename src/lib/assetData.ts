@@ -77,7 +77,7 @@ export const ASSET_DATABASE: Record<string, { name: string; annualReturn: number
 };
 
 /**
- * Tassi di cambio (statici) per la conversione in EUR.
+ * Tassi di cambio (statici) per la conversione.
  * In un'app di produzione, anche questi dovrebbero essere recuperati via API.
  */
 export const EXCHANGE_RATES: Record<string, { symbol: string; rateToEUR: number }> = {
@@ -233,8 +233,9 @@ export async function fetchPriceHistory(
   }
 
   try {
+    // *** MODIFICA: Passa 'days' nel body della chiamata ***
     const { data, error } = await supabase.functions.invoke('fetch-prices', {
-      body: { ticker, currency }
+      body: { ticker, currency, days }
     });
 
     if (error) {
