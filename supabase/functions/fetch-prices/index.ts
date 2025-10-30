@@ -16,7 +16,8 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { ticker, currency: reqCurrency } = await req.json();
+    // *** MODIFICA: Accetta 'days' dal body della richiesta ***
+    const { ticker, currency: reqCurrency, days } = await req.json();
     const currency = reqCurrency || "USD";
 
     if (!ticker) {
@@ -57,9 +58,11 @@ Deno.serve(async (req: Request) => {
 
     console.log(`Fetching Yahoo Finance data for ${yahooTicker}...`);
 
-    // Calcola date per periodo massimo (20 anni)
+    // *** MODIFICA: Calcola data di inizio basandosi su 'days' ***
     const endDate = Math.floor(Date.now() / 1000);
-    const startDate = Math.floor((Date.now() - (20 * 365 * 24 * 60 * 60 * 1000)) / 1000);
+    const defaultDays = 20 * 365; // 20 anni (default)
+    const periodDays = days ? Number(days) : defaultDays;
+    const startDate = Math.floor((Date.now() - (periodDays * 24 * 60 * 60 * 1000)) / 1000);
 
     // Yahoo Finance API endpoint (non ufficiale ma pubblico)
     const apiUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooTicker)}?period1=${startDate}&period2=${endDate}&interval=1d`;
