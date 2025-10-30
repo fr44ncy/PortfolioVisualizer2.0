@@ -418,11 +418,10 @@ export default function App() {
 
 
         <main className="max-w-7xl mx-auto px-6 py-8">
-          {/* *** MODIFICA: Griglia principale aggiornata *** */}
+          {/* *** MODIFICA: Griglia principale *** */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
             
-            {/* --- COLONNA SINISTRA (MODIFICATA) --- */}
-            {/* Aggiunto space-y-6 e la nuova card */}
+            {/* --- COLONNA SINISTRA --- */}
             <div className="lg:col-span-1 space-y-6">
               <PortfolioComposition
                 assets={assets}
@@ -430,11 +429,9 @@ export default function App() {
                 onRemoveAsset={handleRemoveAsset}
                 onUpdateWeight={handleUpdateWeight}
               />
-              {/* --- CARD SPOSTATA QUI --- */}
-              <BestWorstYearsCard data={histogramData} /> 
             </div>
 
-            {/* --- COLONNA DESTRA (MODIFICATA) --- */}
+            {/* --- COLONNA DESTRA --- */}
             <div className="lg:col-span-2 space-y-6">
               
               {/* Sezione PortfolioChart (invariata) */}
@@ -496,69 +493,79 @@ export default function App() {
                 )}
               </div>
               
-              {/* --- Griglia delle 6 card (RIPRISTINATA) --- */}
-              <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-                <MetricsCard
-                  title="Rendimento Annuo"
-                  value={
-                    metrics.annualReturn !== null
-                      ? `${metrics.annualReturn >= 0 ? '+' : ''}${(
-                          metrics.annualReturn * 100
-                        ).toFixed(2)}%`
-                      : '—'
-                  }
-                  trend={
-                    metrics.annualReturn !== null && metrics.annualReturn >= 0
-                      ? 'positive'
-                      : 'negative'
-                  }
-                />
-                <MetricsCard
-                  title="Volatilità"
-                  value={
-                    metrics.annualVol !== null
-                      ? `${(metrics.annualVol * 100).toFixed(2)}%`
-                      : '—'
-                  }
-                />
-                <MetricsCard
-                  title="Sharpe Ratio"
-                  value={
-                    metrics.sharpe !== null ? metrics.sharpe.toFixed(2) : '—'
-                  }
-                  trend={
-                    metrics.sharpe !== null && metrics.sharpe > 1
-                      ? 'positive'
-                      : 'neutral'
-                  }
-                />
-                <MetricsCard
-                  title="VaR (1Y, 95%)"
-                  value={
-                    metrics.var95 !== null
-                      ? `${(metrics.var95 * 100).toFixed(2)}%`
-                      : '—'
-                  }
-                />
-                <MetricsCard
-                  title="CVaR (95%)"
-                  value={
-                    metrics.cvar95 !== null
-                      ? `${(metrics.cvar95 * 100).toFixed(2)}%`
-                      : '—'
-                  }
-                />
-                <MetricsCard
-                  title="Valore Finale"
-                  value={
-                    metrics.finalValue !== null
-                      ? 
-                      `${
-                          EXCHANGE_RATES[currency]?.symbol || currency
-                        }${(metrics.finalValue / 1000).toFixed(1)}k`
-                      : '—'
-                  }
-                />
+              {/* --- MODIFICA: Griglia delle metriche aggiornata --- */}
+              {/* Questa griglia ora divide l'area in 1/3 (BestWorst) e 2/3 (MetricCards) su desktop */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                
+                {/* --- CARD "ANNI" (SULLA SINISTRA) --- */}
+                <div className="lg:col-span-1">
+                  <BestWorstYearsCard data={histogramData} />
+                </div>
+
+                {/* --- Griglia delle 6 card (SULLA DESTRA) --- */}
+                <div className="lg:col-span-2 grid grid-cols-2 sm:grid-cols-3 gap-4">
+                  <MetricsCard
+                    title="Rendimento Annuo"
+                    value={
+                      metrics.annualReturn !== null
+                        ? `${metrics.annualReturn >= 0 ? '+' : ''}${(
+                            metrics.annualReturn * 100
+                          ).toFixed(2)}%`
+                        : '—'
+                    }
+                    trend={
+                      metrics.annualReturn !== null && metrics.annualReturn >= 0
+                        ? 'positive'
+                        : 'negative'
+                    }
+                  />
+                  <MetricsCard
+                    title="Volatilità"
+                    value={
+                      metrics.annualVol !== null
+                        ? `${(metrics.annualVol * 100).toFixed(2)}%`
+                        : '—'
+                    }
+                  />
+                  <MetricsCard
+                    title="Sharpe Ratio"
+                    value={
+                      metrics.sharpe !== null ? metrics.sharpe.toFixed(2) : '—'
+                    }
+                    trend={
+                      metrics.sharpe !== null && metrics.sharpe > 1
+                        ? 'positive'
+                        : 'neutral'
+                    }
+                  />
+                  <MetricsCard
+                    title="VaR (1Y, 95%)"
+                    value={
+                      metrics.var95 !== null
+                        ? `${(metrics.var95 * 100).toFixed(2)}%`
+                        : '—'
+                    }
+                  />
+                  <MetricsCard
+                    title="CVaR (95%)"
+                    value={
+                      metrics.cvar95 !== null
+                        ? `${(metrics.cvar95 * 100).toFixed(2)}%`
+                        : '—'
+                    }
+                  />
+                  <MetricsCard
+                    title="Valore Finale"
+                    value={
+                      metrics.finalValue !== null
+                        ? 
+                        `${
+                            EXCHANGE_RATES[currency]?.symbol || currency
+                          }${(metrics.finalValue / 1000).toFixed(1)}k`
+                        : '—'
+                    }
+                  />
+                </div>
               </div>
             </div>
             {/* --- FINE GRIGLIA PRINCIPALE --- */}
