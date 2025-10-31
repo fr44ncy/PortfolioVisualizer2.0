@@ -351,8 +351,8 @@ export default function MonteCarloSimulator({
                   </AreaChart>
                 </ResponsiveContainer>
                 {/* Etichetta numero simulazioni */}
-                <div className="absolute top-2 right-8 bg-white bg-opacity-80 px-3 py-1 rounded-md border border-gray-200 shadow-sm text-xs font-semibold text-gray-700 pointer-events-none">
-                  {numSimulations.toLocaleString()} simulazioni
+                {/* <div className="absolute top-2 right-8 bg-white bg-opacity-80 px-3 py-1 rounded-md border border-gray-200 shadow-sm text-xs font-semibold text-gray-700 pointer-events-none">
+                {numSimulations.toLocaleString()} simulazioni */}
                 </div>
               </div>
             )}
