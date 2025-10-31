@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { 
   LineChart, Line, 
-  AreaChart, Area, // Importa AreaChart e Area
+  AreaChart, Area, 
   XAxis, YAxis, 
   CartesianGrid, Tooltip, 
   ResponsiveContainer, Legend 
@@ -93,6 +93,8 @@ export default function MonteCarloSimulator({
   const [loading, setLoading] = useState(false);
   const [simulationData, setSimulationData] = useState<SimDataPoint[]>([]);
   const [numSimulations, setNumSimulations] = useState<number>(1000);
+  
+  // *** MODIFICA: Stato per gli anni (ora dinamico) ***
   const [simYears, setSimYears] = useState<number>(30);
   
   const [chartType, setChartType] = useState<'lines' | 'area'>('lines');
@@ -110,7 +112,7 @@ export default function MonteCarloSimulator({
       type: 'module',
     });
 
-    // Invia i dati al worker
+    // Invia i dati (inclusi simYears e numSimulations dallo state) al worker
     worker.postMessage({
       metrics,
       initialCapital,
@@ -143,23 +145,24 @@ export default function MonteCarloSimulator({
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-2">
         <div>
           <h2 className="text-xl font-bold text-gray-900">Simulazione Monte Carlo</h2>
+          {/* *** MODIFICA: Testo dinamico *** */}
           <p className="text-sm text-gray-600 mt-1">
-            Proietta l'evoluzione del capitale in {simYears} anni su {numSimulations} scenari.
+            Proietta l'evoluzione del capitale in {simYears} anni su {numSimulations.toLocaleString()} scenari.
           </p>
         </div>
       </div>
       
       {/* Controlli Simulazione */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
         
         {/* Gruppo Toggles Tipo Grafico */}
-        <div className="flex items-center gap-2 p-1 bg-gray-100 rounded-lg border border-gray-200 w-full sm:w-auto justify-start">
+        <div className="flex items-center gap-2 p-1 bg-gray-100 rounded-lg border border-gray-200">
             <label className="text-sm text-gray-700 font-medium pl-2 hidden sm:block">Grafico:</label>
             <button
               onClick={() => setChartType('lines')}
               disabled={loading}
               title="Grafico a Linee"
-              className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium ${
+              className={`flex items-center justify-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium ${
                 chartType === 'lines' 
                 ? 'bg-white text-blue-700 shadow-sm' 
                 : 'text-gray-500 hover:text-gray-800'
@@ -172,7 +175,7 @@ export default function MonteCarloSimulator({
               onClick={() => setChartType('area')}
               disabled={loading}
               title="Grafico ad Area"
-              className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium ${
+              className={`flex items-center justify-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium ${
                 chartType === 'area' 
                 ? 'bg-white text-blue-700 shadow-sm' 
                 : 'text-gray-500 hover:text-gray-800'
@@ -184,8 +187,25 @@ export default function MonteCarloSimulator({
         </div>
 
         {/* Gruppo Azioni */}
-        <div className="flex items-center gap-3 w-full sm:w-auto">
-          <div className="flex-1 sm:flex-none flex items-center gap-2 bg-gray-50 px-3 py-2 rounded-lg border border-gray-200">
+        <div className="flex flex-wrap items-center gap-3">
+          {/* *** MODIFICA: Aggiunto Selettore Anni *** */}
+          <div className="flex items-center gap-2 bg-gray-50 px-3 py-2 rounded-lg border border-gray-200">
+            <label className="text-sm text-gray-700 font-medium">Anni</label>
+            <select
+              value={simYears}
+              onChange={(e) => setSimYears(Number(e.target.value))}
+              disabled={loading}
+              className="w-full sm:w-auto px-2 py-1 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+            >
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+              <option value={30}>30</option>
+              <option value={40}>40</option>
+              <option value={50}>50</option>
+            </select>
+          </div>
+
+          <div className="flex items-center gap-2 bg-gray-50 px-3 py-2 rounded-lg border border-gray-200">
             <label className="text-sm text-gray-700 font-medium">Scenari</label>
             <select
               value={numSimulations}
@@ -196,6 +216,8 @@ export default function MonteCarloSimulator({
               <option value={1000}>1,000</option>
               <option value={5000}>5,000</option>
               <option value={10000}>10,000</option>
+              {/* *** MODIFICA: Aggiunto 50,000 *** */}
+              <option value={50000}>50,000</option>
             </select>
           </div>
 
@@ -233,7 +255,7 @@ export default function MonteCarloSimulator({
         )}
         {!loading && simulationData.length > 0 && (
           <>
-            {/* --- GRAFICO 1: LINEE (Come da foto 1) --- */}
+            {/* --- GRAFICO 1: LINEE --- */}
             {chartType === 'lines' && (
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={simulationData} margin={{ top: 5, right: 20, left: 0, bottom: 20 }}>
@@ -261,11 +283,10 @@ export default function MonteCarloSimulator({
               </ResponsiveContainer>
             )}
             
-            {/* --- GRAFICO 2: AREE (Come da foto 2) --- */}
+            {/* --- GRAFICO 2: AREE --- */}
             {chartType === 'area' && (
-              <div className="relative w-full h-full"> {/* Container per il label */}
+              <div className="relative w-full h-full"> 
                 <ResponsiveContainer width="100%" height="100%">
-                  {/* *** MODIFICA: Grafico ad Aree Impilate *** */}
                   <AreaChart data={simulationData} margin={{ top: 5, right: 20, left: 0, bottom: 20 }} stackOffset="none">
                     <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                     <XAxis
@@ -281,22 +302,21 @@ export default function MonteCarloSimulator({
                     />
                     <Tooltip content={<AreaTooltip currency={currency} data={simulationData} />} />
                     
-                    {/* Le Aree impilate. L'ordine è importante! */}
                     <Area 
                       type="monotone" 
                       dataKey="base" // 0 -> 5%
                       stackId="1" 
                       stroke="none" 
-                      fill="#a0d8ff" // Azzurro chiaro
+                      fill="#a0d8ff" 
                       fillOpacity={0.4}
-                      name="Range 5-95%" // Nome per la legenda (condiviso)
+                      name="Range 5-95%" 
                     />
                     <Area 
                       type="monotone" 
                       dataKey="banda_5_25" // 5% -> 25%
                       stackId="1" 
                       stroke="none" 
-                      fill="#a0d8ff" // Azzurro chiaro
+                      fill="#a0d8ff" 
                       fillOpacity={0.4}
                     />
                     <Area 
@@ -304,7 +324,7 @@ export default function MonteCarloSimulator({
                       dataKey="banda_25_75" // 25% -> 75%
                       stackId="1" 
                       stroke="none" 
-                      fill="#40a9ff" // Azzurro medio
+                      fill="#40a9ff" 
                       fillOpacity={0.6}
                       name="Range 25-75%"
                     />
@@ -313,21 +333,19 @@ export default function MonteCarloSimulator({
                       dataKey="banda_75_95" // 75% -> 95%
                       stackId="1" 
                       stroke="none" 
-                      fill="#a0d8ff" // Azzurro chiaro
+                      fill="#a0d8ff" 
                       fillOpacity={0.4}
                     />
 
-                    {/* La Linea Mediana viene disegnata sopra le aree */}
                     <Line 
                       type="monotone" 
                       dataKey="media" 
                       name="Portfolio - Mediana"
-                      stroke="#0056b3" // Blu scuro
+                      stroke="#0056b3" 
                       strokeWidth={2} 
                       dot={false}
                     />
 
-                    {/* La Legenda ora mostrerà i 3 nomi corretti */}
                     <Legend verticalAlign="top" align="right" />
                     
                   </AreaChart>
