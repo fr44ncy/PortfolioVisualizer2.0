@@ -213,11 +213,10 @@ export default function MonteCarloSimulator({
               disabled={loading}
               className="w-full sm:w-auto px-2 py-1 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
             >
-              <option value={1000}>1,000</option>
-              <option value={5000}>5,000</option>
               <option value={10000}>10,000</option>
-              {/* *** MODIFICA: Aggiunto 50,000 *** */}
               <option value={50000}>50,000</option>
+              <option value={100000}>100,000</option>
+              <option value={500000}>500,000</option>
             </select>
           </div>
 
