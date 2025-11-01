@@ -591,7 +591,7 @@ export default function App() {
 
           <footer className="mt-8 text-center text-sm text-gray-600 bg-white rounded-xl py-4 border border-gray-200">
             <p className="font-medium">
-              Dati forniti da EODHD (Ricerca) e Yahoo Finance (Prezzi)
+              Dati forniti da Yahoo Finance (ricerca e prezzi)
             </p>
             <p className="text-xs text-gray-500 mt-1">
               Solo dati reali di mercato • Aggiornati giornalmente
