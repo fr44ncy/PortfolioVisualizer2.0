@@ -34,8 +34,8 @@ Deno.serve(async (req: Request) => {
 
     console.log(`Searching EODHD for: ${query}`);
 
-    // *** MODIFICA: Tornati a EODHD (corretto per ISIN) e aumentato il limite a 50 ***
-    // Questo assicura che MI, XETRA, DE vengano trovati prima del filtro.
+    // *** MODIFICA: Aumentato il limite a 50 ***
+    // Questo ci dà molti più risultati da cui filtrare (LSE, US, ecc.)
     const apiUrl = `https://eodhistoricaldata.com/api/search/${encodeURIComponent(query)}?api_token=${EODHD_API_KEY}&fmt=json&limit=50`;
 
     const response = await fetch(apiUrl);
