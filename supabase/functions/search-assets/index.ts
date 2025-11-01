@@ -7,10 +7,6 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
-// API key trovata nel tuo file EDGE_FUNCTIONS.md
-// In produzione, è meglio usare Deno.env.get('EODHD_API_KEY')
-const EODHD_API_KEY = '68fe793540ec48.53643271';
-
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, {
@@ -32,51 +28,61 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    console.log(`Searching EODHD for: ${query}`);
+    console.log(`Searching Yahoo Finance for: ${query}`);
 
-    // *** MODIFICA: Aumentato il limite a 50 ***
-    // Questo ci dà molti più risultati da cui filtrare (LSE, US, ecc.)
-    const apiUrl = `https://eodhistoricaldata.com/api/search/${encodeURIComponent(query)}?api_token=${EODHD_API_KEY}&fmt=json&limit=50`;
+    // *** MODIFICA: Usiamo l'API di ricerca di Yahoo Finance ***
+    // Questa API restituisce i ticker con i suffissi corretti (.MI, .DE)
+    const apiUrl = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(query)}&quotesCount=25&newsCount=0`;
 
-    const response = await fetch(apiUrl);
+    const response = await fetch(apiUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      }
+    });
 
     if (!response.ok) {
-      throw new Error(`EODHD returned ${response.status}`);
+      throw new Error(`Yahoo Finance search returned ${response.status}`);
     }
 
     const data = await response.json();
 
-    if (!Array.isArray(data)) {
+    if (!data.quotes || !Array.isArray(data.quotes)) {
       return new Response(JSON.stringify([]), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Filtro per le borse consentite (Milano, Xetra, Francoforte)
-    // EODHD usa 'MI' per Milano e 'XETRA' o 'DE' per la Germania
-    const allowedExchanges = ['MI', 'XETRA', 'DE'];
+    // Tipi validi e suffissi di borsa richiesti
+    const validTypes = ['EQUITY', 'ETF', 'MUTUALFUND'];
+    // *** MODIFICA CHIAVE: Filtriamo per i suffissi che Yahoo usa per MILANO (.MI) e XETRA (.DE) ***
+    const allowedSuffixes = ['.MI', '.DE']; 
     
-    const suggestions = data
-      .filter((item: any) => 
-        item.Code && 
-        item.Exchange && 
-        item.Currency && 
-        item.Name &&
-        // Applica il filtro sull'array completo di 50 risultati
-        allowedExchanges.includes(item.Exchange.toUpperCase())
-      )
-      .map((item: any) => ({
-        // Formato EODHD: "Ticker.Exchange" (es. "EMIM.MI" o "EUNL.DE")
-        ticker: `${item.Code}.${item.Exchange}`, 
-        isin: item.ISIN || undefined,
-        name: item.Name,
-        currency: item.Currency, // Sarà EUR per queste borse
-      }));
-    
-    console.log(`Found ${suggestions.length} results for "${query}" on MI, XETRA, DE (out of ${data.length} total fetched)`);
+    const suggestions = data.quotes
+      .filter((item: any) => {
+        if (!item.symbol || !item.shortname || !validTypes.includes(item.quoteType)) {
+          return false;
+        }
+        // Controlla se il simbolo termina con uno dei suffissi consentiti
+        return allowedSuffixes.some(suffix => item.symbol.toUpperCase().endsWith(suffix));
+      })
+      .map((item: any) => {
+        // Determina la valuta corretta (Yahoo a volte sbaglia, ma MI e DE sono EUR)
+        const currency = item.symbol.toUpperCase().endsWith('.MI') || item.symbol.toUpperCase().endsWith('.DE') ? 'EUR' : item.currency;
 
-    // Restituisce i risultati filtrati (massimo 10 per la UI)
-    return new Response(JSON.stringify(suggestions.slice(0, 10)), {
+        return {
+          ticker: item.symbol.toUpperCase(), // Es. "ISP.MI" o "EUNL.DE"
+          isin: undefined, // Yahoo Search non fornisce ISIN
+          name: item.shortname,
+          currency: currency,
+        };
+      });
+
+    // Rimuoviamo duplicati esatti (raro, ma possibile)
+    const uniqueSuggestions = Array.from(new Map(suggestions.map(s => [s.ticker, s])).values());
+
+    console.log(`Found ${uniqueSuggestions.length} results for "${query}" on MI & DE`);
+
+    return new Response(JSON.stringify(uniqueSuggestions.slice(0, 10)), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
