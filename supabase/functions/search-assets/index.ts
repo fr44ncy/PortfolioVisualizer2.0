@@ -65,8 +65,7 @@ Deno.serve(async (req: Request) => {
       const exchangeSuffix: Record<string, string> = {
         MI: ".MI",       // Milano
         DE: ".DE",       // XETRA
-        XETRA: ".DE",    // XETRA alternativo
-        F: ".F",         // Frankfurt
+        XETRA: ".XETRA",    // XETRA alternativo
       };
 
       if (item.Exchange && exchangeSuffix[item.Exchange]) {
