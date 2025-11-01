@@ -33,7 +33,9 @@ Deno.serve(async (req: Request) => {
 
     console.log(`Searching EODHD for: ${query}`);
 
-    const apiUrl = `https://eodhistoricaldata.com/api/search/${encodeURIComponent(query)}?api_token=${EODHD_API_KEY}&fmt=json&limit=20`;
+    // *** MODIFICA: Aumentato il limite da 20 a 100 ***
+    // Questo ci dà molti più risultati da cui filtrare
+    const apiUrl = `https://eodhistoricaldata.com/api/search/${encodeURIComponent(query)}?api_token=${EODHD_API_KEY}&fmt=json&limit=100`;
 
     const response = await fetch(apiUrl);
 
@@ -49,7 +51,7 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // *** MODIFICA: Aggiunti i codici 'DE' e 'XETRA' per Francoforte ***
+    // Filtro per le borse consentite (Milano, Xetra, Francoforte)
     const allowedExchanges = ['MI', 'XETRA', 'DE'];
     
     const suggestions = data
@@ -58,7 +60,7 @@ Deno.serve(async (req: Request) => {
         item.Exchange && 
         item.Currency && 
         item.Name &&
-        // La borsa deve essere in una di quelle consentite
+        // Applica il filtro sull'array di 100 risultati
         allowedExchanges.includes(item.Exchange.toUpperCase())
       )
       .map((item: any) => ({
@@ -68,8 +70,9 @@ Deno.serve(async (req: Request) => {
         currency: item.Currency,
       }));
     
-    console.log(`Found ${suggestions.length} results for "${query}" on MI, XETRA, DE`);
+    console.log(`Found ${suggestions.length} results for "${query}" on MI, XETRA, DE (out of ${data.length} total fetched)`);
 
+    // Restituisce i risultati filtrati
     return new Response(JSON.stringify(suggestions), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
