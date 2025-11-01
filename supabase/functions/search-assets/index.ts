@@ -7,8 +7,15 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
-// API key trovata nel tuo file EDGE_FUNCTIONS.md
-const EODHD_API_KEY = '68fe793540ec48.53643271';
+// *** MODIFICA: Mappa per convertire i codici borsa di Yahoo in quelli di EODHD/nostri ***
+// Yahoo usa "MIL" per Milano, "GER" per Xetra/Germania.
+const yahooExchangeMap: Record<string, string> = {
+  'MIL': 'MI',    // Milano
+  'GER': 'DE',    // Germania (Xetra)
+  'XET': 'XETRA', // Xetra (alternativo)
+};
+// Elenco dei codici Yahoo che vogliamo
+const allowedYahooExchanges = Object.keys(yahooExchangeMap); // ['MIL', 'GER', 'XET']
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -31,49 +38,59 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    console.log(`Searching EODHD for: ${query}`);
+    console.log(`Searching Yahoo Finance for: ${query}`);
 
-    // *** MODIFICA: Aumentato il limite da 20 a 100 ***
-    // Questo ci dà molti più risultati da cui filtrare
-    const apiUrl = `https://eodhistoricaldata.com/api/search/${encodeURIComponent(query)}?api_token=${EODHD_API_KEY}&fmt=json&limit=100`;
+    // *** MODIFICA: Usiamo l'API di ricerca di Yahoo Finance (più affidabile per le borse EU) ***
+    const apiUrl = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(query)}&quotesCount=20&newsCount=0`;
 
-    const response = await fetch(apiUrl);
+    const response = await fetch(apiUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      }
+    });
 
     if (!response.ok) {
-      throw new Error(`EODHD returned ${response.status}`);
+      throw new Error(`Yahoo Finance search returned ${response.status}`);
     }
 
     const data = await response.json();
 
-    if (!Array.isArray(data)) {
+    if (!data.quotes || !Array.isArray(data.quotes)) {
       return new Response(JSON.stringify([]), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Filtro per le borse consentite (Milano, Xetra, Francoforte)
-    const allowedExchanges = ['MI', 'XETRA', 'DE'];
+    // Filtra solo azioni ed ETF e SOLO dalle borse consentite
+    const validTypes = ['EQUITY', 'ETF', 'MUTUALFUND'];
     
-    const suggestions = data
+    const suggestions = data.quotes
       .filter((item: any) => 
-        item.Code && 
-        item.Exchange && 
-        item.Currency && 
-        item.Name &&
-        // Applica il filtro sull'array di 100 risultati
-        allowedExchanges.includes(item.Exchange.toUpperCase())
+        item.symbol && 
+        item.shortname &&
+        validTypes.includes(item.quoteType) &&
+        // Filtra per le borse che ci interessano (MIL, GER, XET)
+        item.exchange && allowedYahooExchanges.includes(item.exchange.toUpperCase())
       )
-      .map((item: any) => ({
-        ticker: `${item.Code}.${item.Exchange}`, 
-        isin: item.ISIN || undefined,
-        name: item.Name,
-        currency: item.Currency,
-      }));
-    
-    console.log(`Found ${suggestions.length} results for "${query}" on MI, XETRA, DE (out of ${data.length} total fetched)`);
+      .map((item: any) => {
+        const exchangeCode = item.exchange.toUpperCase();
+        // Converte il codice borsa di Yahoo (es. 'MIL') nel nostro formato (es. 'MI')
+        const internalExchangeCode = yahooExchangeMap[exchangeCode] || exchangeCode;
+        
+        // Ricrea il ticker nel formato EODHD (usato dal resto dell'app)
+        const ticker = `${item.symbol.replace(`.${exchangeCode}`, '')}.${internalExchangeCode}`;
 
-    // Restituisce i risultati filtrati
-    return new Response(JSON.stringify(suggestions), {
+        return {
+          ticker: ticker,
+          isin: undefined, // Yahoo Search non fornisce ISIN
+          name: item.shortname || item.longname || item.symbol,
+          currency: item.currency || 'EUR', // Assumiamo EUR per queste borse
+        };
+      });
+
+    console.log(`Found ${suggestions.length} results for "${query}" on MI, XETRA, DE`);
+
+    return new Response(JSON.stringify(suggestions.slice(0, 10)), { // Limitiamo a 10 risultati finali
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
