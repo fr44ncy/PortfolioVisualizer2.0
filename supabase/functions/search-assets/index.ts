@@ -35,8 +35,8 @@ Deno.serve(async (req: Request) => {
 
     console.log(`Searching EODHD for: ${query}`);
 
-    // API EODHD per la ricerca (come da EDGE_FUNCTIONS.md)
-    const apiUrl = `https://eodhistoricaldata.com/api/search/${encodeURIComponent(query)}?api_token=${EODHD_API_KEY}&fmt=json&limit=10`;
+    // API EODHD per la ricerca (aumentato limit a 20 per filtrare meglio)
+    const apiUrl = `https://eodhistoricaldata.com/api/search/${encodeURIComponent(query)}?api_token=${EODHD_API_KEY}&fmt=json&limit=20`;
 
     const response = await fetch(apiUrl);
 
@@ -53,18 +53,25 @@ Deno.serve(async (req: Request) => {
     }
 
     // Mappa i risultati nel formato AssetSuggestion
-    // Nota: EODHD usa Code e Exchange per formare il ticker
+    // *** MODIFICA: Aggiunto filtro per 'MI' (Milano) e 'XETRA' (Francoforte) ***
     const suggestions = data
-      .filter((item: any) => item.Code && item.Exchange && item.Currency && item.Name)
+      .filter((item: any) => 
+        item.Code && 
+        item.Exchange && 
+        item.Currency && 
+        item.Name &&
+        // La borsa deve essere 'MI' o 'XETRA'
+        (item.Exchange === 'MI' || item.Exchange === 'XETRA') 
+      )
       .map((item: any) => ({
-        // EODHD format: "Ticker.Exchange" (es. "EMIM.AS" o "AAPL.US")
+        // EODHD format: "Ticker.Exchange" (es. "EMIM.MI" o "AAPL.US")
         ticker: `${item.Code}.${item.Exchange}`, 
         isin: item.ISIN || undefined,
         name: item.Name,
-        currency: item.Currency,
+        currency: item.Currency, // Sarà EUR per queste borse
       }));
     
-    console.log(`Found ${suggestions.length} results for "${query}"`);
+    console.log(`Found ${suggestions.length} results for "${query}" on MI and XETRA`);
 
     return new Response(JSON.stringify(suggestions), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
