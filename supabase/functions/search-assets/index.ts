@@ -8,7 +8,6 @@ const corsHeaders = {
 };
 
 // API key trovata nel tuo file EDGE_FUNCTIONS.md
-// In produzione, è meglio usare Deno.env.get('EODHD_API_KEY')
 const EODHD_API_KEY = '68fe793540ec48.53643271';
 
 Deno.serve(async (req: Request) => {
@@ -20,7 +19,6 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    // Legge il 'query' dal body, come si aspetta src/lib/assetData.ts
     const { query } = await req.json();
 
     if (!query || query.length < 2) {
@@ -35,7 +33,6 @@ Deno.serve(async (req: Request) => {
 
     console.log(`Searching EODHD for: ${query}`);
 
-    // API EODHD per la ricerca (aumentato limit a 20 per filtrare meglio)
     const apiUrl = `https://eodhistoricaldata.com/api/search/${encodeURIComponent(query)}?api_token=${EODHD_API_KEY}&fmt=json&limit=20`;
 
     const response = await fetch(apiUrl);
@@ -52,26 +49,26 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Mappa i risultati nel formato AssetSuggestion
-    // *** MODIFICA: Aggiunto filtro per 'MI' (Milano) e 'XETRA' (Francoforte) ***
+    // *** MODIFICA: Aggiunti i codici 'DE' e 'XETRA' per Francoforte ***
+    const allowedExchanges = ['MI', 'XETRA', 'DE'];
+    
     const suggestions = data
       .filter((item: any) => 
         item.Code && 
         item.Exchange && 
         item.Currency && 
         item.Name &&
-        // La borsa deve essere 'MI' o 'XETRA'
-        (item.Exchange === 'MI' || item.Exchange === 'XETRA') 
+        // La borsa deve essere in una di quelle consentite
+        allowedExchanges.includes(item.Exchange.toUpperCase())
       )
       .map((item: any) => ({
-        // EODHD format: "Ticker.Exchange" (es. "EMIM.MI" o "AAPL.US")
         ticker: `${item.Code}.${item.Exchange}`, 
         isin: item.ISIN || undefined,
         name: item.Name,
-        currency: item.Currency, // Sarà EUR per queste borse
+        currency: item.Currency,
       }));
     
-    console.log(`Found ${suggestions.length} results for "${query}" on MI and XETRA`);
+    console.log(`Found ${suggestions.length} results for "${query}" on MI, XETRA, DE`);
 
     return new Response(JSON.stringify(suggestions), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
