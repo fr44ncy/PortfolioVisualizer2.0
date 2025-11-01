@@ -93,10 +93,7 @@ export default function MonteCarloSimulator({
   const [loading, setLoading] = useState(false);
   const [simulationData, setSimulationData] = useState<SimDataPoint[]>([]);
   const [numSimulations, setNumSimulations] = useState<number>(1000);
-  
-  // *** MODIFICA: Stato per gli anni (ora dinamico) ***
   const [simYears, setSimYears] = useState<number>(30);
-  
   const [chartType, setChartType] = useState<'lines' | 'area'>('lines');
   
   const canRun = metrics.annualReturn !== null && metrics.annualVol !== null;
@@ -145,7 +142,6 @@ export default function MonteCarloSimulator({
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-2">
         <div>
           <h2 className="text-xl font-bold text-gray-900">Simulazione Monte Carlo</h2>
-          {/* *** MODIFICA: Testo dinamico *** */}
           <p className="text-sm text-gray-600 mt-1">
             Proietta l'evoluzione del capitale in {simYears} anni su {numSimulations.toLocaleString()} scenari.
           </p>
@@ -188,7 +184,6 @@ export default function MonteCarloSimulator({
 
         {/* Gruppo Azioni */}
         <div className="flex flex-wrap items-center gap-3">
-          {/* *** MODIFICA: Aggiunto Selettore Anni *** */}
           <div className="flex items-center gap-2 bg-gray-50 px-3 py-2 rounded-lg border border-gray-200">
             <label className="text-sm text-gray-700 font-medium">Anni</label>
             <select
@@ -213,10 +208,10 @@ export default function MonteCarloSimulator({
               disabled={loading}
               className="w-full sm:w-auto px-2 py-1 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
             >
+              <option value={1000}>1,000</option>
+              <option value={5000}>5,000</option>
               <option value={10000}>10,000</option>
               <option value={50000}>50,000</option>
-              <option value={100000}>100,000</option>
-              <option value={500000}>500,000</option>
             </select>
           </div>
 
@@ -245,7 +240,8 @@ export default function MonteCarloSimulator({
         {loading && (
           <div className="flex items-center justify-center h-full bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl">
              <div className="text-center">
-                <Loader2 className="w-10 h-10 text-blue-600 animate-spin mb-3" />
+                {/* *** MODIFICA: Aggiunto mx-auto per centrare l'icona *** */}
+                <Loader2 className="w-10 h-10 text-blue-600 animate-spin mb-3 mx-auto" />
                 <div className="text-sm font-medium text-gray-700">
                   Esecuzione di {numSimulations.toLocaleString()} simulazioni...
                 </div>
@@ -349,6 +345,10 @@ export default function MonteCarloSimulator({
                     
                   </AreaChart>
                 </ResponsiveContainer>
+                {/* Etichetta numero simulazioni */}
+                <div className="absolute top-2 right-8 bg-white bg-opacity-80 px-3 py-1 rounded-md border border-gray-200 shadow-sm text-xs font-semibold text-gray-700 pointer-events-none">
+                  {numSimulations.toLocaleString()} simulazioni
+                </div>
               </div>
             )}
           </>
