@@ -48,17 +48,25 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    // Logga i primi risultati per debug
+    console.log("Sample exchanges from API:", results.slice(0, 5).map((r: any) => r.Exchange));
+
     // Filtra solo MI (Milano) e DE (XETRA/Francoforte)
-    const allowedExchanges = ["MI", "DE"];
+    // XETRA potrebbe essere "XETRA" invece di "DE"
+    const allowedExchanges = ["MI", "DE", "XETRA", "F"];
     const filteredResults = results.filter((item: any) => 
       allowedExchanges.includes(item.Exchange)
     );
 
+    console.log(`Found ${filteredResults.length} results from MI/DE/XETRA`);
+
     const suggestions = filteredResults.map((item: any) => {
       let ticker = item.Code;
       const exchangeSuffix: Record<string, string> = {
-        MI: ".MI", // Milano
-        DE: ".DE", // XETRA (Germania)
+        MI: ".MI",       // Milano
+        DE: ".DE",       // XETRA
+        XETRA: ".DE",    // XETRA alternativo
+        F: ".F",         // Frankfurt
       };
 
       if (item.Exchange && exchangeSuffix[item.Exchange]) {
