@@ -1,5 +1,4 @@
 // supabase/functions/search-assets/index.ts
-
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 const corsHeaders = {
@@ -29,67 +28,61 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const EODHD_API_KEY = Deno.env.get("EODHD_API_KEY") || "demo";
-    const apiUrl = `https://eodhistoricaldata.com/api/search/${encodeURIComponent(
-      query
-    )}?api_token=${EODHD_API_KEY}&fmt=json`;
+    console.log(`Searching Yahoo Finance for: ${query}`);
 
-    const response = await fetch(apiUrl);
+    // *** MODIFICA: Usiamo l'API di ricerca di Yahoo Finance ***
+    // Questa API restituisce i ticker con i suffissi corretti (.MI, .DE)
+    const apiUrl = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(query)}&quotesCount=25&newsCount=0`;
+
+    const response = await fetch(apiUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      }
+    });
 
     if (!response.ok) {
-      throw new Error(`EODHD API returned ${response.status}`);
+      throw new Error(`Yahoo Finance search returned ${response.status}`);
     }
 
-    const results = await response.json();
+    const data = await response.json();
 
-    if (!Array.isArray(results)) {
+    if (!data.quotes || !Array.isArray(data.quotes)) {
       return new Response(JSON.stringify([]), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Logga i primi risultati per debug
-    console.log("Sample exchanges from API:", results.slice(0, 5).map((r: any) => r.Exchange));
+    // Tipi validi e suffissi di borsa richiesti
+    const validTypes = ['EQUITY', 'ETF', 'MUTUALFUND'];
+    // *** MODIFICA CHIAVE: Filtriamo per i suffissi che Yahoo usa per MILANO (.MI) e XETRA (.DE) ***
+    const allowedSuffixes = ['.MI', '.DE']; 
+    
+    const suggestions = data.quotes
+      .filter((item: any) => {
+        if (!item.symbol || !item.shortname || !validTypes.includes(item.quoteType)) {
+          return false;
+        }
+        // Controlla se il simbolo termina con uno dei suffissi consentiti
+        return allowedSuffixes.some(suffix => item.symbol.toUpperCase().endsWith(suffix));
+      })
+      .map((item: any) => {
+        // Determina la valuta corretta (Yahoo a volte sbaglia, ma MI e DE sono EUR)
+        const currency = item.symbol.toUpperCase().endsWith('.MI') || item.symbol.toUpperCase().endsWith('.DE') ? 'EUR' : item.currency;
 
-    // Filtra solo MI (Milano) e DE (XETRA/Francoforte)
-    // XETRA potrebbe essere "XETRA" invece di "DE"
-    const allowedExchanges = ["MI", "DE", "XETRA", "F"];
-    const filteredResults = results.filter((item: any) => 
-      allowedExchanges.includes(item.Exchange)
-    );
+        return {
+          ticker: item.symbol.toUpperCase(), // Es. "ISP.MI" o "EUNL.DE"
+          isin: undefined, // Yahoo Search non fornisce ISIN
+          name: item.shortname,
+          currency: currency,
+        };
+      });
 
-    console.log(`Found ${filteredResults.length} results from MI/DE/XETRA`);
+    // Rimuoviamo duplicati esatti (raro, ma possibile)
+    const uniqueSuggestions = Array.from(new Map(suggestions.map(s => [s.ticker, s])).values());
 
-    const suggestions = filteredResults.map((item: any) => {
-      let ticker = item.Code;
-      const exchangeSuffix: Record<string, string> = {
-        MI: ".MI",       // Milano
-        DE: ".DE",       // XETRA
-        XETRA: ".XETRA",    // XETRA alternativo
-      };
+    console.log(`Found ${uniqueSuggestions.length} results for "${query}" on MI & DE`);
 
-      if (item.Exchange && exchangeSuffix[item.Exchange]) {
-        ticker = `${item.Code}${exchangeSuffix[item.Exchange]}`;
-      }
-
-      return {
-        ticker: ticker,
-        isin: item.ISIN || undefined,
-        name: item.Name,
-        currency: item.Currency || "EUR",
-        exchange: item.Exchange,
-      };
-    });
-
-    const uniqueTickers = new Set<string>();
-    const uniqueSuggestions = suggestions.filter((s: any) => {
-      if (uniqueTickers.has(s.ticker)) return false;
-      uniqueTickers.add(s.ticker);
-      return true;
-    });
-
-    // Restituisci TUTTI i risultati filtrati (senza limite)
-    return new Response(JSON.stringify(uniqueSuggestions), {
+    return new Response(JSON.stringify(uniqueSuggestions.slice(0, 10)), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
