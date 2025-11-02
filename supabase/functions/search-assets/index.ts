@@ -30,12 +30,14 @@ Deno.serve(async (req: Request) => {
 
     console.log(`Searching Yahoo Finance for: ${query}`);
 
-    // Usiamo l'API di ricerca di Yahoo Finance
-    const apiUrl = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(query)}&quotesCount=25&newsCount=0`;
+    // *** MODIFICA CHIAVE ***
+    // Aumentiamo il numero di risultati da 25 a 100.
+    // Questo aumenta le possibilità di trovare asset europei
+    // meno popolari quando si usano termini generici.
+    const apiUrl = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(query)}&quotesCount=100&newsCount=0`;
 
     const response = await fetch(apiUrl, {
       headers: {
-        // È buona norma aggiungere un User-Agent
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
       }
     });
@@ -57,7 +59,6 @@ Deno.serve(async (req: Request) => {
     const suggestions = [];
 
     for (const item of data.quotes) {
-      // Controllo di validità base
       if (!item.symbol || !item.shortname || !validTypes.includes(item.quoteType)) {
         continue;
       }
@@ -66,33 +67,25 @@ Deno.serve(async (req: Request) => {
       let finalTicker: string | null = null;
       let currency: string | null = null;
 
-      // *** MODIFICA: Logica di FILTRAGGIO restrittiva ***
-      // Includiamo solo i mercati richiesti (MI, XETRA) che sono in EUR.
-      
+      // Il nostro filtro restrittivo rimane invariato
       if (ticker.endsWith('.MI')) {
-        // Borsa Italiana (Milano)
         finalTicker = ticker;
         currency = 'EUR';
       } 
       else if (ticker.endsWith('.DE')) {
-        // Xetra (Germania), suffisso .DE
         finalTicker = ticker;
         currency = 'EUR';
       }
       else if (ticker.endsWith('.XETRA')) {
-        // Xetra (Germania), suffisso .XETRA
-        // Convertiamo in .DE per compatibilità con altre API Yahoo
         finalTicker = ticker.replace('.XETRA', '.DE');
         currency = 'EUR';
       }
-      // Tutti gli altri suffissi (.AS, .PA, .L, .SW, etc.) o l'assenza
-      // di suffisso (mercati USA) vengono ignorati.
-
+      
       // Aggiungi solo se è un mercato valido (EUR) e non è un duplicato
       if (finalTicker && currency === 'EUR' && !seenTickers.has(finalTicker)) {
         suggestions.push({
           ticker: finalTicker,
-          isin: undefined, // L'API search di Yahoo non fornisce l'ISIN
+          isin: undefined,
           name: item.shortname,
           currency: currency,
         });
@@ -100,9 +93,10 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    console.log(`Found ${suggestions.length} relevant results for "${query}"`);
+    console.log(`Found ${suggestions.length} relevant results (from top 100) for "${query}"`);
 
-    return new Response(JSON.stringify(suggestions.slice(0, 10)), { // Limitiamo a 10 risultati finali
+    // Limitiamo comunque l'output finale ai primi 10
+    return new Response(JSON.stringify(suggestions.slice(0, 10)), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
