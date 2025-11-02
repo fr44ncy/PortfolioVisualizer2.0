@@ -63,7 +63,7 @@ Deno.serve(async (req: Request) => {
         // *** MODIFICA: Nessun filtro di borsa per permettere la ricerca globale per nome ***
       )
       .map((item: any) => {
-        let currency = 'USD'; // Default
+        let currency = 'EUR'; // Default
         const symbolUpper = item.symbol.toUpperCase();
         
         // Assegna la valuta corretta in base al suffisso
@@ -75,10 +75,6 @@ Deno.serve(async (req: Request) => {
           currency = 'EUR';
         } else if (symbolUpper.endsWith('.PA')) {
           currency = 'EUR';
-        } else if (symbolUpper.endsWith('.L')) {
-          currency = 'GBP';
-        } else if (symbolUpper.endsWith('.SW')) {
-          currency = 'CHF';
         } else if (item.currency) {
           currency = item.currency;
         }
