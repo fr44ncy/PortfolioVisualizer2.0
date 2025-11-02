@@ -68,3 +68,60 @@ Deno.serve(async (req: Request) => {
       // *** MODIFICA: Logica di mappatura valuta basata sul SUFFISSO ***
       // Questo ci permette di non filtrare le borse, ma di mappare
       // correttamente le valute per quelle che ci interessano.
+      
+      if (ticker.endsWith('.MI')) {
+        currency = 'EUR';
+      } 
+      else if (ticker.endsWith('.DE')) {
+        currency = 'EUR';
+      } 
+      else if (ticker.endsWith('.XETRA')) {
+        // Converte .XETRA in .DE per compatibilità con fetch-prices
+        ticker = ticker.replace('.XETRA', '.DE');
+        currency = 'EUR';
+      }
+      else if (ticker.endsWith('.AS')) { // Amsterdam
+        currency = 'EUR';
+      } 
+      else if (ticker.endsWith('.PA')) { // Parigi
+        currency = 'EUR';
+      } 
+      else if (ticker.endsWith('.L')) { // Londra
+        currency = 'GBP';
+      } 
+      else if (ticker.endsWith('.SW')) { // Svizzera
+        currency = 'CHF';
+      }
+      // Se non ha un suffisso europeo, usa la valuta fornita da Yahoo
+      else if (item.currency) { 
+        currency = item.currency;
+      }
+
+      // Aggiungi solo se non è un duplicato
+      if (!seenTickers.has(ticker)) {
+        suggestions.push({
+          ticker: ticker,
+          isin: undefined, // Yahoo Search non fornisce ISIN
+          name: item.shortname,
+          currency: currency,
+        });
+        seenTickers.add(ticker);
+      }
+    }
+
+    console.log(`Found ${suggestions.length} relevant results for "${query}"`);
+
+    return new Response(JSON.stringify(suggestions.slice(0, 10)), { // Limitiamo a 10 risultati finali
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  } catch (error) {
+    console.error("Error in search-assets:", error);
+    return new Response(
+      JSON.stringify({ error: (error as Error).message }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      }
+    );
+  }
+});
