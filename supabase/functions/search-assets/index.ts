@@ -31,8 +31,8 @@ Deno.serve(async (req: Request) => {
     console.log(`Searching Yahoo Finance for: ${query}`);
 
     // *** MODIFICA: Usiamo l'API di ricerca di Yahoo Finance ***
-    // Questa API è più efficace per la ricerca testuale (nomi/descrizioni)
-    const apiUrl = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(query)}&quotesCount=20&newsCount=0`;
+    // Questa API gestisce bene nomi, ticker e ISIN.
+    const apiUrl = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(query)}&quotesCount=25&newsCount=0`;
 
     const response = await fetch(apiUrl, {
       headers: {
@@ -52,68 +52,19 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Tipi validi
     const validTypes = ['EQUITY', 'ETF', 'MUTUALFUND'];
-    
-    const suggestions = data.quotes
-      .filter((item: any) => 
-        item.symbol && 
-        item.shortname &&
-        validTypes.includes(item.quoteType)
-        // *** MODIFICA: Nessun filtro di borsa per permettere la ricerca globale per nome ***
-      )
-      .map((item: any) => {
-        let currency = 'EUR'; // Default
-        const symbolUpper = item.symbol.toUpperCase();
-        
-        // Assegna la valuta corretta in base al suffisso
-        if (symbolUpper.endsWith('.MI')) {
-          currency = 'EUR';
-        } else if (symbolUpper.endsWith('.DE') || symbolUpper.endsWith('.XETRA')) {
-          currency = 'EUR';
-        } else if (symbolUpper.endsWith('.AS')) {
-          currency = 'EUR';
-        } else if (symbolUpper.endsWith('.PA')) {
-          currency = 'EUR';
-        } else if (item.currency) {
-          currency = item.currency;
-        }
+    const seenTickers = new Set<string>();
+    const suggestions = [];
 
-        let ticker = symbolUpper;
-        // Converte .XETRA in .DE per compatibilità con fetch-prices
-        if (ticker.endsWith('.XETRA')) {
-          ticker = ticker.replace('.XETRA', '.DE');
-        }
-
-        return {
-          ticker: ticker,
-          isin: undefined, // Yahoo Search non fornisce ISIN
-          name: item.shortname,
-          currency: currency,
-        };
-      });
-
-    // Rimuoviamo duplicati
-    const uniqueTickers = new Set<string>();
-    const uniqueSuggestions = suggestions.filter((s: any) => {
-      if (uniqueTickers.has(s.ticker)) return false;
-      uniqueTickers.add(s.ticker);
-      return true;
-    });
-
-    console.log(`Found ${uniqueSuggestions.length} relevant results for "${query}"`);
-
-    return new Response(JSON.stringify(uniqueSuggestions.slice(0, 10)), { // Limitiamo a 10 risultati finali
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  } catch (error) {
-    console.error("Error in search-assets:", error);
-    return new Response(
-      JSON.stringify({ error: (error as Error).message }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+    for (const item of data.quotes) {
+      // Controllo di validità base
+      if (!item.symbol || !item.shortname || !validTypes.includes(item.quoteType)) {
+        continue;
       }
-    );
-  }
-});
+
+      let ticker = item.symbol.toUpperCase();
+      let currency = 'USD'; // Default
+
+      // *** MODIFICA: Logica di mappatura valuta basata sul SUFFISSO ***
+      // Questo ci permette di non filtrare le borse, ma di mappare
+      // correttamente le valute per quelle che ci interessano.
