@@ -320,7 +320,7 @@ export default function App() {
                     <option value={5}>5 anni</option>
                     <option value={10}>10 anni</option>
                     <option value={15}>15 anni</option>
-                    <option valueP={20}>20 anni</option>
+                    <option value={20}>20 anni</option>
                     <option value={30}>30 anni</option>
                   </select>
                 </div>
