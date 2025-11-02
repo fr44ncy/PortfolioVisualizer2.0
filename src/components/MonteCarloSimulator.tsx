@@ -345,7 +345,6 @@ export default function MonteCarloSimulator({
                     
                   </AreaChart>
                 </ResponsiveContainer>
-                {/* Etichetta numero simulazioni */}
                 </div>
               </div>
             )}
