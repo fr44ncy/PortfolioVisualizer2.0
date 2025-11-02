@@ -62,7 +62,7 @@ Deno.serve(async (req: Request) => {
         // *** MODIFICA: Filtro di borsa restrittivo RIMOSSO ***
       )
       .map((item: any) => {
-        let currency = 'USD'; // Default
+        let currency = 'EUR'; // Default
         const symbolUpper = item.symbol.toUpperCase();
         
         // *** MODIFICA: Logica di mappatura valuta basata sul SUFFISSO (più affidabile) ***
