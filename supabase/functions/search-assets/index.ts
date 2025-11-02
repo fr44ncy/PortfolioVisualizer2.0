@@ -34,7 +34,7 @@ Deno.serve(async (req: Request) => {
     // Aumentiamo il numero di risultati da 25 a 100.
     // Questo aumenta le possibilità di trovare asset europei
     // meno popolari quando si usano termini generici.
-    const apiUrl = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(query)}&quotesCount=100&newsCount=0`;
+    const apiUrl = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(query)}&quotesCount=100000000000&newsCount=0`;
 
     const response = await fetch(apiUrl, {
       headers: {
