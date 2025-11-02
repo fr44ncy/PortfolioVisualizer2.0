@@ -70,14 +70,6 @@ Deno.serve(async (req: Request) => {
           currency = 'EUR';
         } else if (symbolUpper.endsWith('.DE') || symbolUpper.endsWith('.XETRA')) {
           currency = 'EUR';
-        } else if (symbolUpper.endsWith('.AS')) {
-          currency = 'EUR';
-        } else if (symbolUpper.endsWith('.PA')) {
-          currency = 'EUR';
-        } else if (symbolUpper.endsWith('.L')) {
-          currency = 'GBP';
-        } else if (symbolUpper.endsWith('.SW')) {
-          currency = 'CHF';
         } else if (item.currency) {
           // Usa la valuta fornita da Yahoo se non è una borsa EU nota
           currency = item.currency;
