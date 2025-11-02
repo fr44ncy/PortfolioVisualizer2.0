@@ -30,7 +30,8 @@ Deno.serve(async (req: Request) => {
 
     console.log(`Searching Yahoo Finance for: ${query}`);
 
-    // Usiamo l'API di ricerca di Yahoo Finance
+    // *** MODIFICA: Usiamo l'API di ricerca di Yahoo Finance ***
+    // Questa API è più efficace per la ricerca testuale (nomi/descrizioni)
     const apiUrl = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(query)}&quotesCount=20&newsCount=0`;
 
     const response = await fetch(apiUrl, {
@@ -59,19 +60,26 @@ Deno.serve(async (req: Request) => {
         item.symbol && 
         item.shortname &&
         validTypes.includes(item.quoteType)
-        // *** MODIFICA: Filtro di borsa restrittivo RIMOSSO ***
+        // *** MODIFICA: Nessun filtro di borsa per permettere la ricerca globale per nome ***
       )
       .map((item: any) => {
-        let currency = 'EUR'; // Default
+        let currency = 'USD'; // Default
         const symbolUpper = item.symbol.toUpperCase();
         
-        // *** MODIFICA: Logica di mappatura valuta basata sul SUFFISSO (più affidabile) ***
+        // Assegna la valuta corretta in base al suffisso
         if (symbolUpper.endsWith('.MI')) {
           currency = 'EUR';
         } else if (symbolUpper.endsWith('.DE') || symbolUpper.endsWith('.XETRA')) {
           currency = 'EUR';
+        } else if (symbolUpper.endsWith('.AS')) {
+          currency = 'EUR';
+        } else if (symbolUpper.endsWith('.PA')) {
+          currency = 'EUR';
+        } else if (symbolUpper.endsWith('.L')) {
+          currency = 'GBP';
+        } else if (symbolUpper.endsWith('.SW')) {
+          currency = 'CHF';
         } else if (item.currency) {
-          // Usa la valuta fornita da Yahoo se non è una borsa EU nota
           currency = item.currency;
         }
 
@@ -89,7 +97,7 @@ Deno.serve(async (req: Request) => {
         };
       });
 
-    // Rimuoviamo duplicati (es. se trova sia .DE che .XETRA che puntano allo stesso .DE)
+    // Rimuoviamo duplicati
     const uniqueTickers = new Set<string>();
     const uniqueSuggestions = suggestions.filter((s: any) => {
       if (uniqueTickers.has(s.ticker)) return false;
