@@ -30,12 +30,12 @@ Deno.serve(async (req: Request) => {
 
     console.log(`Searching Yahoo Finance for: ${query}`);
 
-    // *** MODIFICA: Usiamo l'API di ricerca di Yahoo Finance ***
-    // Questa API gestisce bene nomi, ticker e ISIN.
+    // Usiamo l'API di ricerca di Yahoo Finance
     const apiUrl = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(query)}&quotesCount=25&newsCount=0`;
 
     const response = await fetch(apiUrl, {
       headers: {
+        // È buona norma aggiungere un User-Agent
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
       }
     });
@@ -62,50 +62,41 @@ Deno.serve(async (req: Request) => {
         continue;
       }
 
-      let ticker = item.symbol.toUpperCase();
-      let currency = 'USD'; // Default
+      const ticker = item.symbol.toUpperCase();
+      let finalTicker: string | null = null;
+      let currency: string | null = null;
 
-      // *** MODIFICA: Logica di mappatura valuta basata sul SUFFISSO ***
-      // Questo ci permette di non filtrare le borse, ma di mappare
-      // correttamente le valute per quelle che ci interessano.
+      // *** MODIFICA: Logica di FILTRAGGIO restrittiva ***
+      // Includiamo solo i mercati richiesti (MI, XETRA) che sono in EUR.
       
       if (ticker.endsWith('.MI')) {
+        // Borsa Italiana (Milano)
+        finalTicker = ticker;
         currency = 'EUR';
       } 
       else if (ticker.endsWith('.DE')) {
+        // Xetra (Germania), suffisso .DE
+        finalTicker = ticker;
         currency = 'EUR';
-      } 
+      }
       else if (ticker.endsWith('.XETRA')) {
-        // Converte .XETRA in .DE per compatibilità con fetch-prices
-        ticker = ticker.replace('.XETRA', '.DE');
+        // Xetra (Germania), suffisso .XETRA
+        // Convertiamo in .DE per compatibilità con altre API Yahoo
+        finalTicker = ticker.replace('.XETRA', '.DE');
         currency = 'EUR';
       }
-      else if (ticker.endsWith('.AS')) { // Amsterdam
-        currency = 'EUR';
-      } 
-      else if (ticker.endsWith('.PA')) { // Parigi
-        currency = 'EUR';
-      } 
-      else if (ticker.endsWith('.L')) { // Londra
-        currency = 'GBP';
-      } 
-      else if (ticker.endsWith('.SW')) { // Svizzera
-        currency = 'CHF';
-      }
-      // Se non ha un suffisso europeo, usa la valuta fornita da Yahoo
-      else if (item.currency) { 
-        currency = item.currency;
-      }
+      // Tutti gli altri suffissi (.AS, .PA, .L, .SW, etc.) o l'assenza
+      // di suffisso (mercati USA) vengono ignorati.
 
-      // Aggiungi solo se non è un duplicato
-      if (!seenTickers.has(ticker)) {
+      // Aggiungi solo se è un mercato valido (EUR) e non è un duplicato
+      if (finalTicker && currency === 'EUR' && !seenTickers.has(finalTicker)) {
         suggestions.push({
-          ticker: ticker,
-          isin: undefined, // Yahoo Search non fornisce ISIN
+          ticker: finalTicker,
+          isin: undefined, // L'API search di Yahoo non fornisce l'ISIN
           name: item.shortname,
           currency: currency,
         });
-        seenTickers.add(ticker);
+        seenTickers.add(finalTicker);
       }
     }
 
