@@ -7,11 +7,8 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
-// Elenco dei suffissi ticker di Yahoo Finance che vogliamo
-const ALLOWED_SUFFIXES = ['.MI', '.DE', '.XETRA'];
-
-// Elenco dei codici borsa di Yahoo Finance che vogliamo
-const ALLOWED_EXCHANGES = ['MIL', 'GER', 'XET']; // MIL=Milano, GER=Xetra, XET=Xetra
+// Codici borsa di Yahoo Finance che vogliamo mappare
+const ALLOWED_EXCHANGES = ['MIL', 'GER', 'XET']; // MIL=Milano, GER=Xetra(Germania), XET=Xetra
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -62,28 +59,33 @@ Deno.serve(async (req: Request) => {
     const suggestions = [];
 
     for (const item of data.quotes) {
+      // Controllo di validità base
       if (!item.symbol || !item.shortname || !validTypes.includes(item.quoteType)) {
         continue;
       }
 
       const symbolUpper = item.symbol.toUpperCase();
       const exchangeUpper = (item.exchange || '').toUpperCase();
-
-      // *** MODIFICA CHIAVE: Logica di filtro e mappatura ***
       
       let finalTicker = "";
       const currency = "EUR"; // Assumiamo EUR per queste borse
 
-      // 1. Controlla i SUFFISSI (modo più affidabile)
+      // *** LOGICA DI FILTRO E MAPPATURA CORRETTA ***
+
+      // 1. Il simbolo ha già un suffisso .MI (Milano)
       if (symbolUpper.endsWith('.MI')) {
         finalTicker = symbolUpper;
-      } else if (symbolUpper.endsWith('.DE')) {
+      }
+      // 2. Il simbolo ha già un suffisso .DE (Xetra/Germania)
+      else if (symbolUpper.endsWith('.DE')) {
         finalTicker = symbolUpper;
-      } else if (symbolUpper.endsWith('.XETRA')) {
-        // Converti .XETRA in .DE per compatibilità con fetch-prices
+      }
+      // 3. Il simbolo ha un suffisso .XETRA (Xetra alternativo)
+      else if (symbolUpper.endsWith('.XETRA')) {
+        // Converti .XETRA in .DE per compatibilità con la funzione fetch-prices
         finalTicker = symbolUpper.replace('.XETRA', '.DE');
       }
-      // 2. Controlla i codici Borsa (se il suffisso manca)
+      // 4. Il simbolo NON ha suffisso, controlliamo il codice borsa
       else if (ALLOWED_EXCHANGES.includes(exchangeUpper)) {
         if (exchangeUpper === 'MIL') {
           finalTicker = `${symbolUpper}.MI`;
