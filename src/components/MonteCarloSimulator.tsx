@@ -323,6 +323,23 @@ export default function MonteCarloSimulator({
                       fillOpacity={0.6}
                       name="Range 25-75%"
                     />
+                     <Area 
+                      type="monotone" 
+                      dataKey="banda_75_95" // 75% -> 95%
+                      stackId="1" 
+                      stroke="none" 
+                      fill="#a0d8ff" 
+                      fillOpacity={0.4}
+                    />
+
+                    <Line 
+                      type="monotone" 
+                      dataKey="media" 
+                      name="Portfolio - Mediana"
+                      stroke="#0056b3" 
+                      strokeWidth={2} 
+                      dot={false}
+                    />
 
                     <Legend verticalAlign="top" align="right" />
                     
