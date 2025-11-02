@@ -7,9 +7,6 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
-// Codici borsa di Yahoo Finance che vogliamo mappare
-const ALLOWED_EXCHANGES = ['MIL', 'GER', 'XET']; // MIL=Milano, GER=Xetra(Germania), XET=Xetra
-
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, {
@@ -34,7 +31,7 @@ Deno.serve(async (req: Request) => {
     console.log(`Searching Yahoo Finance for: ${query}`);
 
     // Usiamo l'API di ricerca di Yahoo Finance
-    const apiUrl = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(query)}&quotesCount=25&newsCount=0`;
+    const apiUrl = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(query)}&quotesCount=20&newsCount=0`;
 
     const response = await fetch(apiUrl, {
       headers: {
@@ -54,61 +51,63 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    // Tipi validi
     const validTypes = ['EQUITY', 'ETF', 'MUTUALFUND'];
-    const seenTickers = new Set<string>();
-    const suggestions = [];
-
-    for (const item of data.quotes) {
-      // Controllo di validità base
-      if (!item.symbol || !item.shortname || !validTypes.includes(item.quoteType)) {
-        continue;
-      }
-
-      const symbolUpper = item.symbol.toUpperCase();
-      const exchangeUpper = (item.exchange || '').toUpperCase();
-      
-      let finalTicker = "";
-      const currency = "EUR"; // Assumiamo EUR per queste borse
-
-      // *** LOGICA DI FILTRO E MAPPATURA CORRETTA ***
-
-      // 1. Il simbolo ha già un suffisso .MI (Milano)
-      if (symbolUpper.endsWith('.MI')) {
-        finalTicker = symbolUpper;
-      }
-      // 2. Il simbolo ha già un suffisso .DE (Xetra/Germania)
-      else if (symbolUpper.endsWith('.DE')) {
-        finalTicker = symbolUpper;
-      }
-      // 3. Il simbolo ha un suffisso .XETRA (Xetra alternativo)
-      else if (symbolUpper.endsWith('.XETRA')) {
-        // Converti .XETRA in .DE per compatibilità con la funzione fetch-prices
-        finalTicker = symbolUpper.replace('.XETRA', '.DE');
-      }
-      // 4. Il simbolo NON ha suffisso, controlliamo il codice borsa
-      else if (ALLOWED_EXCHANGES.includes(exchangeUpper)) {
-        if (exchangeUpper === 'MIL') {
-          finalTicker = `${symbolUpper}.MI`;
-        } else if (exchangeUpper === 'GER' || exchangeUpper === 'XET') {
-          finalTicker = `${symbolUpper}.DE`;
+    
+    const suggestions = data.quotes
+      .filter((item: any) => 
+        item.symbol && 
+        item.shortname &&
+        validTypes.includes(item.quoteType)
+        // *** MODIFICA: Filtro di borsa restrittivo RIMOSSO ***
+      )
+      .map((item: any) => {
+        let currency = 'USD'; // Default
+        const symbolUpper = item.symbol.toUpperCase();
+        
+        // *** MODIFICA: Logica di mappatura valuta basata sul SUFFISSO (più affidabile) ***
+        if (symbolUpper.endsWith('.MI')) {
+          currency = 'EUR';
+        } else if (symbolUpper.endsWith('.DE') || symbolUpper.endsWith('.XETRA')) {
+          currency = 'EUR';
+        } else if (symbolUpper.endsWith('.AS')) {
+          currency = 'EUR';
+        } else if (symbolUpper.endsWith('.PA')) {
+          currency = 'EUR';
+        } else if (symbolUpper.endsWith('.L')) {
+          currency = 'GBP';
+        } else if (symbolUpper.endsWith('.SW')) {
+          currency = 'CHF';
+        } else if (item.currency) {
+          // Usa la valuta fornita da Yahoo se non è una borsa EU nota
+          currency = item.currency;
         }
-      }
 
-      // Se abbiamo trovato un ticker valido e non è un duplicato...
-      if (finalTicker && !seenTickers.has(finalTicker)) {
-        suggestions.push({
-          ticker: finalTicker,
+        let ticker = symbolUpper;
+        // Converte .XETRA in .DE per compatibilità con fetch-prices
+        if (ticker.endsWith('.XETRA')) {
+          ticker = ticker.replace('.XETRA', '.DE');
+        }
+
+        return {
+          ticker: ticker,
           isin: undefined, // Yahoo Search non fornisce ISIN
           name: item.shortname,
           currency: currency,
-        });
-        seenTickers.add(finalTicker);
-      }
-    }
+        };
+      });
 
-    console.log(`Found ${suggestions.length} results for "${query}" on MI & DE/XETRA`);
+    // Rimuoviamo duplicati (es. se trova sia .DE che .XETRA che puntano allo stesso .DE)
+    const uniqueTickers = new Set<string>();
+    const uniqueSuggestions = suggestions.filter((s: any) => {
+      if (uniqueTickers.has(s.ticker)) return false;
+      uniqueTickers.add(s.ticker);
+      return true;
+    });
 
-    return new Response(JSON.stringify(suggestions.slice(0, 10)), {
+    console.log(`Found ${uniqueSuggestions.length} relevant results for "${query}"`);
+
+    return new Response(JSON.stringify(uniqueSuggestions.slice(0, 10)), { // Limitiamo a 10 risultati finali
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
