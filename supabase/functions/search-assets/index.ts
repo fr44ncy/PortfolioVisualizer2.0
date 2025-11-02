@@ -7,6 +7,12 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+// Elenco dei suffissi ticker di Yahoo Finance che vogliamo
+const ALLOWED_SUFFIXES = ['.MI', '.DE', '.XETRA'];
+
+// Elenco dei codici borsa di Yahoo Finance che vogliamo
+const ALLOWED_EXCHANGES = ['MIL', 'GER', 'XET']; // MIL=Milano, GER=Xetra, XET=Xetra
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, {
@@ -30,8 +36,7 @@ Deno.serve(async (req: Request) => {
 
     console.log(`Searching Yahoo Finance for: ${query}`);
 
-    // *** MODIFICA: Usiamo l'API di ricerca di Yahoo Finance ***
-    // Questa API restituisce i ticker con i suffissi corretti (.MI, .DE)
+    // Usiamo l'API di ricerca di Yahoo Finance
     const apiUrl = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(query)}&quotesCount=25&newsCount=0`;
 
     const response = await fetch(apiUrl, {
@@ -52,37 +57,56 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Tipi validi e suffissi di borsa richiesti
     const validTypes = ['EQUITY', 'ETF', 'MUTUALFUND'];
-    // *** MODIFICA CHIAVE: Filtriamo per i suffissi che Yahoo usa per MILANO (.MI) e XETRA (.DE) ***
-    const allowedSuffixes = ['.MI', '.DE']; 
-    
-    const suggestions = data.quotes
-      .filter((item: any) => {
-        if (!item.symbol || !item.shortname || !validTypes.includes(item.quoteType)) {
-          return false;
-        }
-        // Controlla se il simbolo termina con uno dei suffissi consentiti
-        return allowedSuffixes.some(suffix => item.symbol.toUpperCase().endsWith(suffix));
-      })
-      .map((item: any) => {
-        // Determina la valuta corretta (Yahoo a volte sbaglia, ma MI e DE sono EUR)
-        const currency = item.symbol.toUpperCase().endsWith('.MI') || item.symbol.toUpperCase().endsWith('.DE') ? 'EUR' : item.currency;
+    const seenTickers = new Set<string>();
+    const suggestions = [];
 
-        return {
-          ticker: item.symbol.toUpperCase(), // Es. "ISP.MI" o "EUNL.DE"
+    for (const item of data.quotes) {
+      if (!item.symbol || !item.shortname || !validTypes.includes(item.quoteType)) {
+        continue;
+      }
+
+      const symbolUpper = item.symbol.toUpperCase();
+      const exchangeUpper = (item.exchange || '').toUpperCase();
+
+      // *** MODIFICA CHIAVE: Logica di filtro e mappatura ***
+      
+      let finalTicker = "";
+      const currency = "EUR"; // Assumiamo EUR per queste borse
+
+      // 1. Controlla i SUFFISSI (modo più affidabile)
+      if (symbolUpper.endsWith('.MI')) {
+        finalTicker = symbolUpper;
+      } else if (symbolUpper.endsWith('.DE')) {
+        finalTicker = symbolUpper;
+      } else if (symbolUpper.endsWith('.XETRA')) {
+        // Converti .XETRA in .DE per compatibilità con fetch-prices
+        finalTicker = symbolUpper.replace('.XETRA', '.DE');
+      }
+      // 2. Controlla i codici Borsa (se il suffisso manca)
+      else if (ALLOWED_EXCHANGES.includes(exchangeUpper)) {
+        if (exchangeUpper === 'MIL') {
+          finalTicker = `${symbolUpper}.MI`;
+        } else if (exchangeUpper === 'GER' || exchangeUpper === 'XET') {
+          finalTicker = `${symbolUpper}.DE`;
+        }
+      }
+
+      // Se abbiamo trovato un ticker valido e non è un duplicato...
+      if (finalTicker && !seenTickers.has(finalTicker)) {
+        suggestions.push({
+          ticker: finalTicker,
           isin: undefined, // Yahoo Search non fornisce ISIN
           name: item.shortname,
           currency: currency,
-        };
-      });
+        });
+        seenTickers.add(finalTicker);
+      }
+    }
 
-    // Rimuoviamo duplicati esatti (raro, ma possibile)
-    const uniqueSuggestions = Array.from(new Map(suggestions.map(s => [s.ticker, s])).values());
+    console.log(`Found ${suggestions.length} results for "${query}" on MI & DE/XETRA`);
 
-    console.log(`Found ${uniqueSuggestions.length} results for "${query}" on MI & DE`);
-
-    return new Response(JSON.stringify(uniqueSuggestions.slice(0, 10)), {
+    return new Response(JSON.stringify(suggestions.slice(0, 10)), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
