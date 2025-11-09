@@ -228,53 +228,41 @@ export function calculateMetrics(navSeries: NavPoint[]): PortfolioMetrics {
   // Assumiamo un risk-free rate del 2% per lo Sharpe Ratio
   const sharpeRatio = (annReturn - 0.02) / (annVol || 1e-9); 
 
-  // Calcola VaR e CVaR storici basati sui rendimenti rolling a 1 anno
   const rolling: number[] = [];
-  const window = 252; // 1 anno di trading
-  
-  // Creiamo una mappa dei NAV per data per un accesso rapido
-  const navMap = new Map(navSeries.map(p => [p.date, p.nav]));
-  
+  const window = 252;
+
   if (navSeries.length >= window) {
     for (let i = window; i < navSeries.length; i++) {
-        // Cerca il NAV di 1 anno prima (252 giorni di trading prima)
-        const currentDate = navSeries[i].date;
-        const prevDate = navSeries[i - window].date; 
-        
-        const currentNav = navMap.get(currentDate);
-        const prevNav = navMap.get(prevDate);
-        
-        if (currentNav && prevNav) {
+        const currentNav = navSeries[i].nav;
+        const prevNav = navSeries[i - window].nav;
+
+        if (currentNav && prevNav && prevNav > 0) {
             rolling.push(currentNav / prevNav - 1);
         }
     }
   }
 
-
   let var_hist = null;
   let cvar_hist = null;
-  if (rolling.length > 0) {
+
+  if (rolling.length > 10) {
     const sorted = [...rolling].sort((a, b) => a - b);
-    const idx = Math.floor(0.05 * sorted.length); // Indice per il 5° percentile
-    const p95 = sorted[Math.max(0, idx)];
-    var_hist = -p95; // Value at Risk
-    
-    const worst = sorted.slice(0, idx + 1); // Prende il 5% peggiore
+    const idx = Math.max(0, Math.floor(0.05 * sorted.length));
+    const p5 = sorted[idx];
+    var_hist = Math.abs(p5);
+
+    const worst = sorted.slice(0, Math.max(1, idx + 1));
     const avgWorst = worst.reduce((s, x) => s + x, 0) / worst.length;
-    cvar_hist = -avgWorst; // Conditional Value at Risk
-  } else {
-      // Fallback se non ci sono abbastanza dati per il rolling (es. < 1 anno)
-      // Calcola VaR/CVaR sui rendimenti giornalieri (meno significativo ma è un dato)
-      if (daily.length > 20) {
-           const sortedDaily = [...daily].sort((a, b) => a - b);
-           const idxDaily = Math.floor(0.05 * sortedDaily.length);
-           const p95Daily = sortedDaily[Math.max(0, idxDaily)];
-           var_hist = -p95Daily * Math.sqrt(252); // Annualizza VaR giornaliero (approssimazione)
-           
-           const worstDaily = sortedDaily.slice(0, idxDaily + 1);
-           const avgWorstDaily = worstDaily.reduce((s, x) => s + x, 0) / worstDaily.length;
-           cvar_hist = -avgWorstDaily * Math.sqrt(252); // Annualizza CVaR giornaliero
-      }
+    cvar_hist = Math.abs(avgWorst);
+  } else if (daily.length > 50) {
+      const sortedDaily = [...daily].sort((a, b) => a - b);
+      const idxDaily = Math.max(0, Math.floor(0.05 * sortedDaily.length));
+      const p5Daily = sortedDaily[idxDaily];
+      var_hist = Math.abs(p5Daily) * Math.sqrt(252);
+
+      const worstDaily = sortedDaily.slice(0, Math.max(1, idxDaily + 1));
+      const avgWorstDaily = worstDaily.reduce((s, x) => s + x, 0) / worstDaily.length;
+      cvar_hist = Math.abs(avgWorstDaily) * Math.sqrt(252);
   }
 
   return {

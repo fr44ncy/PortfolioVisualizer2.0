@@ -1,4 +1,3 @@
-// supabase/functions/search-assets/index.ts
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 const corsHeaders = {
@@ -30,11 +29,7 @@ Deno.serve(async (req: Request) => {
 
     console.log(`Searching Yahoo Finance for: ${query}`);
 
-    // *** MODIFICA CHIAVE ***
-    // Aumentiamo il numero di risultati da 25 a 100.
-    // Questo aumenta le possibilità di trovare asset europei
-    // meno popolari quando si usano termini generici.
-    const apiUrl = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(query)}&quotesCount=10000&newsCount=0`;
+    const apiUrl = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(query)}&quotesCount=100&newsCount=0`;
 
     const response = await fetch(apiUrl, {
       headers: {
@@ -65,24 +60,22 @@ Deno.serve(async (req: Request) => {
 
       const ticker = item.symbol.toUpperCase();
       let finalTicker: string | null = null;
-      let currency: string | null = null;
+      const currency = 'EUR';
 
-      // Il nostro filtro restrittivo rimane invariato
       if (ticker.endsWith('.MI')) {
         finalTicker = ticker;
-        currency = 'EUR';
-      } 
+      }
       else if (ticker.endsWith('.DE')) {
         finalTicker = ticker;
-        currency = 'EUR';
       }
       else if (ticker.endsWith('.XETRA')) {
         finalTicker = ticker.replace('.XETRA', '.DE');
-        currency = 'EUR';
       }
-      
-      // Aggiungi solo se è un mercato valido (EUR) e non è un duplicato
-      if (finalTicker && currency === 'EUR' && !seenTickers.has(finalTicker)) {
+      else {
+        continue;
+      }
+
+      if (finalTicker && !seenTickers.has(finalTicker)) {
         suggestions.push({
           ticker: finalTicker,
           isin: undefined,
@@ -93,10 +86,9 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    console.log(`Found ${suggestions.length} relevant results (from top 100) for "${query}"`);
+    console.log(`Found ${suggestions.length} XETRA/MI results for "${query}"`);
 
-    // Limitiamo comunque l'output finale ai primi 10
-    return new Response(JSON.stringify(suggestions.slice(0, 10)), {
+    return new Response(JSON.stringify(suggestions.slice(0, 15)), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
