@@ -3,7 +3,8 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
+  "Access-Control-Allow-Headers":
+    "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
 Deno.serve(async (req: Request) => {
@@ -17,13 +18,16 @@ Deno.serve(async (req: Request) => {
   try {
     const { query } = await req.json();
 
+    // --- PALETTO OPZIONALE (vedi nota sotto) ---
+    // Questo è un paletto, ma è utile per evitare query vuote.
+    // Puoi rimuoverlo se vuoi permettere ricerche con meno di 2 caratteri.
     if (!query || query.length < 2) {
       return new Response(
         JSON.stringify({ error: "Query must be at least 2 characters" }),
         {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+        },
       );
     }
 
@@ -34,7 +38,10 @@ Deno.serve(async (req: Request) => {
 
     console.log(`Searching Finnhub for: ${query}`);
 
-    const apiUrl = `https://finnhub.io/api/v1/search?q=${encodeURIComponent(query)}&token=${finnhubKey}`;
+    const apiUrl =
+      `https://finnhub.io/api/v1/search?q=${
+        encodeURIComponent(query)
+      }&token=${finnhubKey}`;
 
     const response = await fetch(apiUrl);
 
@@ -50,7 +57,8 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const europeanExchanges = ['XETRA', 'MIC', 'MILANEX'];
+    // Non più necessario, dato che non filtriamo solo per Europa
+    // const europeanExchanges = ['XETRA', 'MIC', 'MILANEX'];
     const seenTickers = new Set<string>();
     const suggestions = [];
 
@@ -60,35 +68,34 @@ Deno.serve(async (req: Request) => {
       }
 
       const ticker = item.symbol.toUpperCase();
-      const exchange = (item.exchange || "").toUpperCase();
+      // const exchange = (item.exchange || "").toUpperCase(); // Non più necessario per il filtro
 
-      let finalTicker: string | null = null;
-      let currency = "EUR";
-
-      if (ticker.endsWith(".MI") || exchange.includes("BORSA ITALIANA") || exchange.includes("MIC")) {
-        finalTicker = ticker.endsWith(".MI") ? ticker : ticker + ".MI";
-      } else if (ticker.endsWith(".DE") || exchange === "XETRA") {
-        finalTicker = ticker;
-      } else if (exchange === "XETRA" && !ticker.endsWith(".DE")) {
-        finalTicker = ticker + ".DE";
-      } else {
-        continue;
-      }
-
-      if (finalTicker && !seenTickers.has(finalTicker)) {
+      // --- MODIFICA 1: RIMOZIONE FILTRO "PALETTO" ---
+      // La logica complessa if/else if/else è stata rimossa.
+      // Ora accettiamo qualsiasi risultato da Finnhub,
+      // a patto che non l'abbiamo già aggiunto (controllo duplicati).
+      
+      if (!seenTickers.has(ticker)) {
         suggestions.push({
-          ticker: finalTicker,
+          ticker: ticker,
           isin: item.isin || undefined,
           name: item.description,
-          currency: currency,
+          // Abbiamo rimosso 'currency: "EUR"' perché non possiamo più
+          // assumerlo. Aggiungiamo 'type' e 'displaySymbol'
+          // da Finnhub per dare più contesto.
+          type: item.type,
+          displaySymbol: item.displaySymbol,
         });
-        seenTickers.add(finalTicker);
+        seenTickers.add(ticker);
       }
     }
 
-    console.log(`Found ${suggestions.length} XETRA/Milan results for "${query}"`);
+    // Log aggiornato per riflettere la ricerca generica
+    console.log(`Found ${suggestions.length} results for "${query}"`);
 
-    return new Response(JSON.stringify(suggestions.slice(0, 15)), {
+    // --- MODIFICA 2: RIMOZIONE LIMITE 15 RISULTATI ---
+    // Restituiamo l'intero array di 'suggestions', non solo i primi 15
+    return new Response(JSON.stringify(suggestions), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
@@ -98,7 +105,7 @@ Deno.serve(async (req: Request) => {
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      },
     );
   }
 });
