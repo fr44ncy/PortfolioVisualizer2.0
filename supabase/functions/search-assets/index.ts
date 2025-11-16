@@ -27,66 +27,66 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    console.log(`Searching Yahoo Finance for: ${query}`);
+    const finnhubKey = Deno.env.get("FINNHUB_API_KEY");
+    if (!finnhubKey) {
+      throw new Error("FINNHUB_API_KEY not configured");
+    }
 
-    const apiUrl = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(query)}&quotesCount=100&newsCount=0`;
+    console.log(`Searching Finnhub for: ${query}`);
 
-    const response = await fetch(apiUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-      }
-    });
+    const apiUrl = `https://finnhub.io/api/v1/search?q=${encodeURIComponent(query)}&token=${finnhubKey}`;
+
+    const response = await fetch(apiUrl);
 
     if (!response.ok) {
-      throw new Error(`Yahoo Finance search returned ${response.status}`);
+      throw new Error(`Finnhub search returned ${response.status}`);
     }
 
     const data = await response.json();
 
-    if (!data.quotes || !Array.isArray(data.quotes)) {
+    if (!data.result || !Array.isArray(data.result)) {
       return new Response(JSON.stringify([]), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const validTypes = ['EQUITY', 'ETF', 'MUTUALFUND'];
+    const europeanExchanges = ['XETRA', 'MIC', 'MILANEX'];
     const seenTickers = new Set<string>();
     const suggestions = [];
 
-    for (const item of data.quotes) {
-      if (!item.symbol || !item.shortname || !validTypes.includes(item.quoteType)) {
+    for (const item of data.result) {
+      if (!item.symbol || !item.description) {
         continue;
       }
 
       const ticker = item.symbol.toUpperCase();
-      let finalTicker: string | null = null;
-      const currency = 'EUR';
+      const exchange = (item.exchange || "").toUpperCase();
 
-      if (ticker.endsWith('.MI')) {
+      let finalTicker: string | null = null;
+      let currency = "EUR";
+
+      if (ticker.endsWith(".MI") || exchange.includes("BORSA ITALIANA") || exchange.includes("MIC")) {
+        finalTicker = ticker.endsWith(".MI") ? ticker : ticker + ".MI";
+      } else if (ticker.endsWith(".DE") || exchange === "XETRA") {
         finalTicker = ticker;
-      }
-      else if (ticker.endsWith('.DE')) {
-        finalTicker = ticker;
-      }
-      else if (ticker.endsWith('.XETRA')) {
-        finalTicker = ticker.replace('.XETRA', '.DE');
-      }
-      else {
+      } else if (exchange === "XETRA" && !ticker.endsWith(".DE")) {
+        finalTicker = ticker + ".DE";
+      } else {
         continue;
       }
 
       if (finalTicker && !seenTickers.has(finalTicker)) {
         suggestions.push({
           ticker: finalTicker,
-          isin: undefined,
-          name: item.shortname,
+          isin: item.isin || undefined,
+          name: item.description,
           currency: currency,
         });
         seenTickers.add(finalTicker);
       }
     }
 
-    console.log(`Found ${suggestions.length} XETRA/MI results for "${query}"`);
+    console.log(`Found ${suggestions.length} XETRA/Milan results for "${query}"`);
 
     return new Response(JSON.stringify(suggestions.slice(0, 15)), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
